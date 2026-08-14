@@ -262,11 +262,9 @@ public class SubtitleSetting {
 
     public static void applyStyle(Context context, @Nullable SubtitleView subtitleView) {
         if (subtitleView == null) return;
-        subtitleView.reset();
         subtitleView.setStyle(getStyle(context));
         subtitleView.setApplyEmbeddedStyles(!isStyleForced());
         subtitleView.setApplyEmbeddedFontSizes(true);
-        if (isScaleApplied()) subtitleView.setTextSizeScale(getScale(context));
         if (isPositionSet()) subtitleView.setBottomPosition(getPosition() / 100.0f);
     }
 

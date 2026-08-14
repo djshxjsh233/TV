@@ -99,7 +99,7 @@ public final class ExoPlayerEffect implements PlayerEffect {
 
     @Override
     public boolean supportsSkipSilence() {
-        return player.isSkipSilenceSupported();
+        return true;
     }
 
     @Override
