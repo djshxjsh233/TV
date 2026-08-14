@@ -28,23 +28,6 @@
             android:layout_height="match_parent"
             app:surface_type="surface_view" />
 
-        <com.google.android.material.textview.MaterialTextView
-            android:id="@+id/video_resolution"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="top|start"
-            android:layout_marginStart="8dp"
-            android:layout_marginTop="8dp"
-            android:background="@drawable/shape_item"
-            android:paddingStart="6dp"
-            android:paddingTop="2dp"
-            android:paddingEnd="6dp"
-            android:paddingBottom="2dp"
-            android:textColor="@color/white"
-            android:textSize="12sp"
-            android:visibility="gone"
-            tools:text="1280x720" />
-
         <include
             android:id="@+id/widget"
             layout="@layout/view_widget_vod"
@@ -63,6 +46,23 @@
             layout="@layout/view_progress"
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
+
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/video_resolution"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|start"
+            android:layout_marginStart="8dp"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/shape_item"
+            android:paddingStart="6dp"
+            android:paddingTop="2dp"
+            android:paddingEnd="6dp"
+            android:paddingBottom="2dp"
+            android:textColor="@color/white"
+            android:textSize="12sp"
+            android:visibility="gone"
+            tools:text="1280x720" />
 
     </FrameLayout>
 
