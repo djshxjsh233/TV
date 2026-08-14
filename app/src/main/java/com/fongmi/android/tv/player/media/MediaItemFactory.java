@@ -7,10 +7,7 @@ import android.text.TextUtils;
 import androidx.media3.common.C;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.MediaMetadata;
-import androidx.media3.common.util.Util;
 
-import com.fongmi.android.tv.App;
-import com.fongmi.android.tv.BuildConfig;
 import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.bean.Drm;
 import com.fongmi.android.tv.bean.Sub;
@@ -37,7 +34,8 @@ public final class MediaItemFactory {
     }
 
     public static String getDefaultUserAgent() {
-        return Util.getUserAgent(App.get(), BuildConfig.APPLICATION_ID);
+        // 默认使用电脑 Chrome UA, 避免蜂蜜默认UA被源站识别/拒绝
+        return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
     }
 
     public static MediaItem from(PlaySpec spec) {
