@@ -59,13 +59,12 @@ public class M3U8 {
         if (m3u8content.contains("\r\n")) linesplit = "\r\n";
         String[] lines = m3u8content.split(linesplit);
 
-        // 第一阶段: 按"目录路径"统计各分片所在路径出现次数 (广告分片通常在不同目录/域名)
+        // 阶段1: 按"父路径"统计各分片所在路径出现次数 (广告分片通常在不同目录/域名)
         // 用父路径而不是文件名截断, 避免纯数字序号分片(0000000.ts...)被误判为不同前缀
         HashMap<String, Integer> preUrlMap = new HashMap<>();
         for (String line : lines) {
             if (line.length() == 0 || line.charAt(0) == '#') continue;
             String preUrl = parentPath(line);
-            // null = 与 m3u8 同目录 (主流); /xxx/ = 其他目录 (可能的广告)
             String key = preUrl == null ? SAME_DIR : preUrl;
             Integer cnt = preUrlMap.get(key);
             preUrlMap.put(key, cnt != null ? cnt + 1 : 1);
@@ -73,19 +72,19 @@ public class M3U8 {
         if (preUrlMap.size() <= 1) return null;
         boolean domainFiltering = false;
         if (maxPercent(preUrlMap) < 0.8) {
-            // 尝试判断域名, 取同域名最多的链接, 其它域名当作广告去除
+            // 域名统计: 取同域名最多的链接, 其它域名当作广告
             preUrlMap.clear();
             for (String line : lines) {
                 if (line.length() == 0 || line.charAt(0) == '#') continue;
                 if (!line.startsWith("http://") && !line.startsWith("https://")) return null;
-                int ifirst = line.indexOf('/', 9); // skip http:// 或 https://
+                int ifirst = line.indexOf('/', 9);
                 if (ifirst <= 0) continue;
                 String preUrl = line.substring(0, ifirst);
                 Integer cnt = preUrlMap.get(preUrl);
                 preUrlMap.put(preUrl, cnt != null ? cnt + 1 : 1);
             }
             if (preUrlMap.size() <= 1) return null;
-            if (maxPercent(preUrlMap) < 0.8) return null; // 视频非广告片断占比不够大
+            if (maxPercent(preUrlMap) < 0.8) return null; // 正常分片占比不够大
             boolean allDomainsExceedThreshold = true;
             for (Integer count : preUrlMap.values()) {
                 if (count <= 15) {
@@ -97,7 +96,7 @@ public class M3U8 {
             domainFiltering = true;
         }
 
-        // 找出出现次数最多的 key (文件前缀或域名均适用)
+        // 找出出现次数最多的 key (父路径或域名)
         int maxTimes = 0;
         String maxTimesPreUrl = "";
         for (Map.Entry<String, Integer> entry : preUrlMap.entrySet()) {
@@ -108,79 +107,83 @@ public class M3U8 {
         }
         if (maxTimes == 0) return null;
 
-        boolean dealedExtXKey = false;
+        // 阶段2: 标记广告分片 (父路径/域名与主流不一致, 且不在 SAME_DIR)
+        boolean[] ad = new boolean[lines.length];
         for (int i = 0; i < lines.length; ++i) {
-            // 处理解密KEY的绝对路径拼接
-            if (!dealedExtXKey && lines[i].startsWith(TAG_KEY)) {
-                String keyUrl = "";
-                int start = lines[i].indexOf("URI=\"");
-                if (start != -1) {
-                    start += "URI=\"".length();
-                    int end = lines[i].indexOf("\"", start);
-                    if (end != -1) keyUrl = lines[i].substring(start, end);
-                    if (!keyUrl.startsWith("http://") && !keyUrl.startsWith("https://")) {
-                        String newKeyUrl;
-                        if (keyUrl.charAt(0) == '/') {
-                            int ifirst = tsUrlPre.indexOf('/', 9);
-                            newKeyUrl = tsUrlPre.substring(0, ifirst) + keyUrl;
-                        } else {
-                            newKeyUrl = tsUrlPre + keyUrl;
-                        }
-                        lines[i] = lines[i].replace("URI=\"" + keyUrl + "\"", "URI=\"" + newKeyUrl + "\"");
-                    }
-                    dealedExtXKey = true;
-                }
-            }
-            if (lines[i].length() == 0 || lines[i].charAt(0) == '#') continue;
-            // 根据判断方式过滤
-            if (!domainFiltering) {
-                // 父路径统计模式: 保留 SAME_DIR(同目录)或与主流父路径一致的分片; 其余(广告目录)删除
-                String line = lines[i];
-                String path = parentPath(line);
-                String key = path == null ? SAME_DIR : path;
-                if (key.equals(maxTimesPreUrl) || key.equals(SAME_DIR)) {
-                    // 拼成可播放的绝对 URL (相对路径)
-                    if (!line.startsWith("http://") && !line.startsWith("https://")) {
-                        if (line.charAt(0) == '/') {
-                            int ifirst = tsUrlPre.indexOf('/', 9); // skip https://, http://
-                            line = tsUrlPre.substring(0, ifirst) + line;
-                        } else {
-                            line = tsUrlPre + line;
-                        }
-                    }
-                    lines[i] = line;
-                } else {
-                    if (i > 0 && lines[i - 1].length() > 0 && lines[i - 1].charAt(0) == '#') lines[i - 1] = "";
-                    lines[i] = "";
-                    currentAdCount += 1;
-                }
-            } else {
-                // 域名过滤模式: 先转换为绝对 URL
-                String absoluteUrl = lines[i];
-                if (!absoluteUrl.startsWith("http://") && !absoluteUrl.startsWith("https://")) {
-                    if (absoluteUrl.charAt(0) == '/') {
-                        int ifirst = tsUrlPre.indexOf('/', 9);
-                        absoluteUrl = tsUrlPre.substring(0, ifirst) + absoluteUrl;
-                    } else {
-                        absoluteUrl = tsUrlPre + absoluteUrl;
-                    }
-                }
-                // 提取域名部分 (http://xxx或https://xxx)
-                int ifirst = absoluteUrl.indexOf('/', 9);
-                String domain = (ifirst > 0) ? absoluteUrl.substring(0, ifirst) : absoluteUrl;
-                // 保留条件: 域名等于出现次数最多的, 或者该域名出现次数超过timesNoAd次
-                Integer cnt = preUrlMap.get(domain);
-                if (domain.equals(maxTimesPreUrl) || (cnt != null && cnt > timesNoAd)) {
-                    lines[i] = absoluteUrl;
-                } else {
-                    if (i > 0 && lines[i - 1].length() > 0 && lines[i - 1].charAt(0) == '#') lines[i - 1] = "";
-                    lines[i] = "";
-                    currentAdCount += 1;
-                }
-            }
+            String line = lines[i];
+            if (line.length() == 0 || line.charAt(0) == '#') continue;
+            String path = parentPath(line);
+            String key = path == null ? SAME_DIR : path;
+            if (key.equals(SAME_DIR) || key.equals(maxTimesPreUrl)) continue; // 正常分片
+            ad[i] = true; // 广告分片
+            currentAdCount += 1;
         }
-        return String.join(linesplit, lines);
+        int adCount = 0;
+        for (boolean b : ad) if (b) adCount++;
+        if (adCount == 0) return null;
+
+        // 阶段3: 段级删除 —— 按 #EXT-X-DISCONTINUITY 分段, 广告分片所在的整段删除
+        // 这样播放器按序播放不会遇到分片序列空洞 (旧版3.5.7同款思路: 多移除一点, 保证无缝)
+        boolean hasDiscontinuity = m3u8content.contains(TAG_DISCONTINUITY);
+        if (hasDiscontinuity) {
+            // 段级删除: 按 #EXT-X-DISCONTINUITY 分段, 段内含广告分片则整段删除
+            // (包括段首 DISCONTINUITY 标记和段内所有 EXTINF/分片, 保证不产生孤儿标记破坏配对)
+            boolean[] delLine = new boolean[lines.length];
+            boolean inAdSegment = false;
+            int segmentStart = -1;
+            List<Integer> segmentLines = new ArrayList<>();
+            for (int i = 0; i < lines.length; ++i) {
+                String line = lines[i];
+                if (line.startsWith(TAG_DISCONTINUITY)) {
+                    // 上一段结束: 若含广告则整段标记删除
+                    if (inAdSegment) for (int idx : segmentLines) delLine[idx] = true;
+                    inAdSegment = false;
+                    segmentStart = i;
+                    segmentLines = new ArrayList<>();
+                    segmentLines.add(i);
+                    continue;
+                }
+                segmentLines.add(i);
+                if (ad[i]) inAdSegment = true;
+            }
+            // 最后一段
+            if (inAdSegment) for (int idx : segmentLines) delLine[idx] = true;
+            return rebuildLines(lines, delLine, linesplit);
+        } else {
+            // 无 DISCONTINUITY: 逐行删除广告分片, 同时清掉其前一行 (#EXTINF), 避免留空
+            boolean[] delLine = new boolean[lines.length];
+            for (int i = 0; i < lines.length; ++i) {
+                if (ad[i]) {
+                    delLine[i] = true;
+                    if (i > 0) delLine[i - 1] = true;
+                }
+            }
+            return rebuildLines(lines, delLine, linesplit);
+        }
     }
+
+    /** 按删除标记重建 m3u8 (跳过被删行, 保留 #EXT-X-ENDLIST) */
+    private static String rebuildLines(String[] lines, boolean[] delLine, String linesplit) {
+        StringBuilder sb = new StringBuilder();
+        boolean lastDeleted = true;
+        for (int i = 0; i < lines.length; ++i) {
+            if (delLine[i]) {
+                lastDeleted = true;
+                continue;
+            }
+            if (lines[i].length() == 0) {
+                if (!lastDeleted) sb.append(linesplit);
+                continue;
+            }
+            sb.append(lines[i]).append(linesplit);
+            lastDeleted = false;
+        }
+        String result = sb.toString();
+        // 去掉末尾多余换行, 保证以 ENDLIST 结尾
+        while (result.endsWith("\n\n")) result = result.substring(0, result.length() - 1);
+        return result;
+    }
+
 
     private static String get(String tsUrlPre, String m3u8Content) {
         m3u8Content = m3u8Content.replaceAll("\r\n", "\n");
