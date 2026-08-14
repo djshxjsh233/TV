@@ -46,14 +46,11 @@ public class Updater implements Download.Callback, UpdateListener {
     }
 
     public Updater force() {
-        Notify.show(R.string.update_check);
-        Setting.putUpdate(true);
         return this;
     }
 
     public void start(FragmentActivity activity) {
-        if (!Setting.getUpdate()) return;
-        Task.execute(() -> doInBackground(activity));
+        // 更新功能已彻底关闭
     }
 
     private void doInBackground(FragmentActivity activity) {
