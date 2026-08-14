@@ -13,7 +13,7 @@ import androidx.media3.exoplayer.source.MediaSource;
 import androidx.media3.exoplayer.source.preload.DefaultPreloadManager;
 import androidx.media3.exoplayer.source.preload.PreloadException;
 import androidx.media3.exoplayer.source.preload.PreloadManagerListener;
-import androidx.media3.exoplayer.trackselection.DecodeTrackSelector;
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector;
 import androidx.media3.exoplayer.trackselection.TrackSelector;
 
 import com.fongmi.android.tv.App;
@@ -108,7 +108,6 @@ final class ExoPlayerSession {
 
     private static final class DecodeTrackSelectorFactory implements TrackSelector.Factory {
 
-        private final List<DecodeTrackSelector> trackSelectors = new ArrayList<>(2);
         private int decode;
 
         private DecodeTrackSelectorFactory(int decode) {
@@ -118,15 +117,11 @@ final class ExoPlayerSession {
         @NonNull
         @Override
         public TrackSelector createTrackSelector(@NonNull Context context) {
-            DecodeTrackSelector trackSelector = ExoUtil.buildTrackSelector(decode);
-            trackSelectors.add(trackSelector);
-            return trackSelector;
+            return ExoUtil.buildTrackSelector(decode);
         }
 
         private void setDecode(int decode) {
-            if (this.decode == decode) return;
             this.decode = decode;
-            for (DecodeTrackSelector trackSelector : trackSelectors) ExoUtil.setDecodePreferences(trackSelector, decode);
         }
     }
 }

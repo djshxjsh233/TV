@@ -20,7 +20,7 @@ import androidx.media3.exoplayer.audio.AudioSink;
 import androidx.media3.exoplayer.audio.AudioTrackAudioOutputProvider;
 import androidx.media3.exoplayer.audio.DefaultAudioSink;
 import androidx.media3.exoplayer.source.preload.DefaultPreloadManager;
-import androidx.media3.exoplayer.trackselection.DecodeTrackSelector;
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector;
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector;
 import androidx.media3.exoplayer.util.EventLogger;
 
@@ -66,22 +66,15 @@ public class ExoUtil {
         return extras.keySet().stream().filter(key -> extras.getString(key) != null).collect(Collectors.toMap(key -> key, extras::getString));
     }
 
-    static DecodeTrackSelector buildTrackSelector(int decode) {
-        DecodeTrackSelector trackSelector = new DecodeTrackSelector(App.get());
+    static DefaultTrackSelector buildTrackSelector(int decode) {
+        DefaultTrackSelector trackSelector = new DefaultTrackSelector(App.get());
         DefaultTrackSelector.Parameters.Builder builder = trackSelector.buildUponParameters();
         if (DecodeSetting.isPreferAAC()) builder.setPreferredAudioMimeType(MimeTypes.AUDIO_AAC);
         builder.setPreferredTextLanguages(LangUtil.getPreferredTextLanguages());
         builder.setTunnelingEnabled(DecodeSetting.isTunnelingEnabled());
         builder.setForceHighestSupportedBitrate(true);
         trackSelector.setParameters(builder.build());
-        setDecodePreferences(trackSelector, decode);
         return trackSelector;
-    }
-
-    static void setDecodePreferences(DecodeTrackSelector trackSelector, int decode) {
-        int audioDecode = isAudioSoftwareDecode(decode) ? PlayerEngine.SOFT : PlayerEngine.HARD;
-        int videoDecode = isVideoSoftwareDecode(decode) ? PlayerEngine.SOFT : PlayerEngine.HARD;
-        trackSelector.setRendererDecodePreferences(audioDecode, videoDecode);
     }
 
     private static boolean isAudioSoftwareDecode(int decode) {
