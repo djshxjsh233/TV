@@ -406,7 +406,7 @@ public class PlayerManager implements ParseCallback {
     }
 
     public long getTextOffsetMs() {
-        return player.isCommandAvailable(Player.COMMAND_GET_TEXT_OFFSET) ? player.getTextOffsetMs() : 0;
+        return 0;
     }
 
     public void setTextOffsetMs(long offsetMs) {

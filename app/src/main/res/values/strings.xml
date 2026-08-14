@@ -425,4 +425,5 @@
         <item>Select subtitle track</item>
     </string-array>
 
+    <string name="exo_controls_time_placeholder" translatable="false">00:00:00</string>
 </resources>

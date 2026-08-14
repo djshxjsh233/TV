@@ -15,6 +15,8 @@
  */
 package androidx.media3.ui;
 
+import com.fongmi.android.tv.R;
+
 import static androidx.media3.common.Player.COMMAND_GET_CURRENT_MEDIA_ITEM;
 import static androidx.media3.common.Player.COMMAND_GET_TIMELINE;
 import static androidx.media3.common.Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM;
