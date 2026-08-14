@@ -38,11 +38,7 @@ import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.setting.SpeedSetting;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.ResUtil;
-import com.fongmi.android.tv.utils.Task;
 import com.fongmi.android.tv.utils.Util;
-import com.fongmi.android.tv.server.Server;
-import com.fongmi.android.tv.player.media.M3U8;
-import com.github.catvod.net.OkHttp;
 import com.google.common.net.HttpHeaders;
 
 import java.util.HashMap;
@@ -502,34 +498,8 @@ public class PlayerManager implements ParseCallback {
 
     public void start(PlaySpec spec, long timeout, long startPositionMs) {
         this.spec = spec;
-        // 播前预取净化: m3u8 点播先下载+净化, 再让播放器用净化后的清单播放 (TVBox 同款, 时间轴连续不卡广告时长)
-        String url = spec.getUrl();
-        if (url != null && Setting.isAdblock() && isM3u8(url)) {
-            Task.execute(() -> {
-                try {
-                    String base = toDirectoryUrl(url);
-                    String content = OkHttp.string(url, spec.getHeaders());
-                    String purified = M3U8.purify(base, content);
-                    if (purified != null && !purified.equals(content)) {
-                        com.fongmi.android.tv.server.process.M3u8.setContent(purified);
-                        spec.setUrl(Server.get().getAddress("/m3u8"));
-                    }
-                } catch (Exception ignored) {
-                }
-                App.post(() -> setMediaItem(timeout, startPositionMs));
-            });
-        } else {
-            setMediaItem(timeout, startPositionMs);
-        }
-    }
-
-    private static boolean isM3u8(String url) {
-        return url.contains(".m3u8") || url.contains(".m3u8?");
-    }
-
-    private static String toDirectoryUrl(String url) {
-        int idx = url.lastIndexOf('/');
-        return idx > 0 ? url.substring(0, idx + 1) : url;
+        // 净化由播放器网络拦截器实时完成 (M3u8AdInterceptor), 播放器请求m3u8时同步净化返回, 无预取等待
+        setMediaItem(timeout, startPositionMs);
     }
 
     public void parse(String key, Result result, boolean useParse, MediaMetadata metadata) {
