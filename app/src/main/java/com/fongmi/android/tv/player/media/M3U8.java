@@ -21,6 +21,8 @@ public class M3U8 {
     private static final String TAG_MEDIA_DURATION = "#EXTINF";
     private static final String TAG_ENDLIST = "#EXT-X-ENDLIST";
     private static final String TAG_KEY = "#EXT-X-KEY";
+    /** 统计用: 与 m3u8 同目录的分片归一标记 */
+    private static final String SAME_DIR = "://same-dir/";
 
     private static final Pattern REGEX_X_DISCONTINUITY = Pattern.compile("#EXT-X-DISCONTINUITY[\\s\\S]*?(?=#EXT-X-DISCONTINUITY|$)");
     private static final Pattern REGEX_MEDIA_DURATION = Pattern.compile(TAG_MEDIA_DURATION + ":([\\d\\.]+)\\b");
@@ -57,15 +59,16 @@ public class M3U8 {
         if (m3u8content.contains("\r\n")) linesplit = "\r\n";
         String[] lines = m3u8content.split(linesplit);
 
-        // 第一阶段: 按去掉文件后缀后统计各前缀出现次数
+        // 第一阶段: 按"目录路径"统计各分片所在路径出现次数 (广告分片通常在不同目录/域名)
+        // 用父路径而不是文件名截断, 避免纯数字序号分片(0000000.ts...)被误判为不同前缀
         HashMap<String, Integer> preUrlMap = new HashMap<>();
         for (String line : lines) {
             if (line.length() == 0 || line.charAt(0) == '#') continue;
-            int ilast = line.lastIndexOf('.');
-            if (ilast <= 4) continue;
-            String preUrl = line.substring(0, ilast - 4);
-            Integer cnt = preUrlMap.get(preUrl);
-            preUrlMap.put(preUrl, cnt != null ? cnt + 1 : 1);
+            String preUrl = parentPath(line);
+            // null = 与 m3u8 同目录 (主流); /xxx/ = 其他目录 (可能的广告)
+            String key = preUrl == null ? SAME_DIR : preUrl;
+            Integer cnt = preUrlMap.get(key);
+            preUrlMap.put(key, cnt != null ? cnt + 1 : 1);
         }
         if (preUrlMap.size() <= 1) return null;
         boolean domainFiltering = false;
@@ -131,15 +134,21 @@ public class M3U8 {
             if (lines[i].length() == 0 || lines[i].charAt(0) == '#') continue;
             // 根据判断方式过滤
             if (!domainFiltering) {
-                if (lines[i].startsWith(maxTimesPreUrl)) {
-                    if (!lines[i].startsWith("http://") && !lines[i].startsWith("https://")) {
-                        if (lines[i].charAt(0) == '/') {
+                // 父路径统计模式: 保留 SAME_DIR(同目录)或与主流父路径一致的分片; 其余(广告目录)删除
+                String line = lines[i];
+                String path = parentPath(line);
+                String key = path == null ? SAME_DIR : path;
+                if (key.equals(maxTimesPreUrl) || key.equals(SAME_DIR)) {
+                    // 拼成可播放的绝对 URL (相对路径)
+                    if (!line.startsWith("http://") && !line.startsWith("https://")) {
+                        if (line.charAt(0) == '/') {
                             int ifirst = tsUrlPre.indexOf('/', 9); // skip https://, http://
-                            lines[i] = tsUrlPre.substring(0, ifirst) + lines[i];
+                            line = tsUrlPre.substring(0, ifirst) + line;
                         } else {
-                            lines[i] = tsUrlPre + lines[i];
+                            line = tsUrlPre + line;
                         }
                     }
+                    lines[i] = line;
                 } else {
                     if (i > 0 && lines[i - 1].length() > 0 && lines[i - 1].charAt(0) == '#') lines[i - 1] = "";
                     lines[i] = "";
@@ -257,6 +266,20 @@ public class M3U8 {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    /** 提取分片 URL 的父路径: 绝对 URL 取 域名+目录; 无斜杠相对路径(同目录)返回 null; 以/开头的返回其目录 */
+    private static String parentPath(String line) {
+        if (line.startsWith("http://") || line.startsWith("https://")) {
+            int last = line.lastIndexOf('/');
+            if (last <= 9) return null;
+            return line.substring(0, last + 1);
+        }
+        if (line.startsWith("/")) {
+            int last = line.lastIndexOf('/');
+            if (last > 1) return line.substring(0, last + 1);
+        }
+        return null; // 同目录分片
     }
 
     private static boolean shouldResolve(String line) {
