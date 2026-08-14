@@ -18,8 +18,12 @@ import okhttp3.ResponseBody;
  * m3u8 响应净化拦截器 (播放前剔广告, 丝滑不卡)
  * 挂载在播放器 HTTP 数据源上: 请求 m3u8 清单时, 先净化再返回给播放器解析。
  * 只处理 m3u8 文本清单 (URL 含 .m3u8 或 Content-Type 为 mpegurl), ts 分片等二进制不处理。
- * 注意: 一旦调用了 body.string() 消费了响应体, 无论是否净化, 都必须重建 ResponseBody 返回,
- * 否则播放器读到的 body 已被消费为空, 导致所有资源无法播放。
+ *
+ * 安全规则:
+ * 1. 带 Range 头的请求(部分内容/206)不净化, 直接放行
+ * 2. 一旦调用了 body.string() 消费响应体, 无论是否净化, 都必须重建 ResponseBody 返回,
+ *    否则播放器读到的 body 已被消费为空, 导致所有资源无法播放
+ * 3. 重建时同步修正 Content-Length (UTF-8 字节数), 保证 media3 OkHttpDataSource 读取一致
  */
 public class M3u8AdInterceptor implements Interceptor {
 
@@ -32,6 +36,10 @@ public class M3u8AdInterceptor implements Interceptor {
         Response response = chain.proceed(request);
         if (!enabled || !Setting.isAdblock() || !response.isSuccessful()) return response;
         try {
+            // 带 Range 的请求(部分内容)不净化, 避免 Content-Length/Content-Range 错乱
+            if (request.header("Range") != null) return response;
+            // 非 200 完整响应(如 206 部分内容)不净化
+            if (response.code() != 200) return response;
             String url = request.url().toString();
             String contentType = response.header("Content-Type");
             boolean isM3u8 = url.contains(".m3u8") || (contentType != null && contentType.contains("mpegurl"));
@@ -42,6 +50,8 @@ public class M3u8AdInterceptor implements Interceptor {
             String content = body.string();
             if (content == null || content.length() == 0) return rebuild(response, content, mediaType);
             if (!content.startsWith("#EXTM3U")) return rebuild(response, content, mediaType);
+            // master playlist (多码率子清单) 不净化, 避免误伤子流 URL
+            if (content.contains("#EXT-X-STREAM-INF")) return rebuild(response, content, mediaType);
             String purified = M3U8.purify(url, content);
             if (purified == null || purified.equals(content)) return rebuild(response, content, mediaType);
             return rebuild(response, purified, mediaType);

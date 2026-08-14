@@ -135,8 +135,20 @@ public class ExoMediaSourceFactory implements MediaSource.Factory {
         return httpDataSourceFactory;
     }
 
-    /** 播放器专用 OkHttpClient: 挂 m3u8 广告净化拦截器 (不影响 API 请求) */
+    /** 播放器专用 OkHttpClient: 挂 m3u8 广告净化拦截器 + 电脑UA (不影响 API 请求) */
     private static okhttp3.OkHttpClient buildPlayerClient() {
-        return OkHttp.player().newBuilder().addInterceptor(new M3u8AdInterceptor()).build();
+        return OkHttp.player().newBuilder()
+                .addInterceptor(new M3u8AdInterceptor())
+                .addInterceptor(chain -> {
+                    okhttp3.Request request = chain.request();
+                    if (request.header("User-Agent") == null) {
+                        request = request.newBuilder().header("User-Agent", UA_DESKTOP).build();
+                    }
+                    return chain.proceed(request);
+                })
+                .build();
     }
+
+    /** 电脑 Chrome UA (播放器请求默认使用, 避免蜂蜜默认UA被源站识别) */
+    private static final String UA_DESKTOP = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 }
