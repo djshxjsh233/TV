@@ -42,18 +42,12 @@ public final class ExoPlayerEffect implements PlayerEffect {
 
     @Override
     public boolean supportsVideoEffect() {
-        return player.getVideoEffectsSupport() == ExoPlayer.VIDEO_EFFECTS_SUPPORTED;
+        return true;
     }
 
     @Override
     public int getVideoEffectError() {
-        return switch (player.getVideoEffectsSupport()) {
-            case ExoPlayer.VIDEO_EFFECTS_SUPPORTED -> 0;
-            case ExoPlayer.VIDEO_EFFECTS_UNSUPPORTED_DRM -> R.string.error_video_effect_drm;
-            case ExoPlayer.VIDEO_EFFECTS_UNSUPPORTED_RENDERER -> R.string.error_video_effect_decode;
-            case ExoPlayer.VIDEO_EFFECTS_UNSUPPORTED_TUNNELING -> R.string.error_video_effect_tunnel;
-            default -> R.string.error_video_effect_unsupported;
-        };
+        return 0;
     }
 
     @Override
@@ -71,7 +65,7 @@ public final class ExoPlayerEffect implements PlayerEffect {
 
     @Override
     public boolean supportsAudioEffect() {
-        return player.getAudioProcessingSupport() == ExoPlayer.AUDIO_PROCESSING_SUPPORTED && !audioEffectFailed;
+        return !audioEffectFailed;
     }
 
     @Override
@@ -81,11 +75,7 @@ public final class ExoPlayerEffect implements PlayerEffect {
 
     @Override
     public int getAudioEffectError() {
-        return switch (player.getAudioProcessingSupport()) {
-            case ExoPlayer.AUDIO_PROCESSING_SUPPORTED -> audioEffectFailed ? R.string.error_audio_effect_apply : 0;
-            case ExoPlayer.AUDIO_PROCESSING_UNSUPPORTED_PASSTHROUGH -> R.string.error_audio_effect_passthrough;
-            default -> R.string.error_audio_effect_unsupported;
-        };
+        return audioEffectFailed ? R.string.error_audio_effect_apply : 0;
     }
 
     @Override

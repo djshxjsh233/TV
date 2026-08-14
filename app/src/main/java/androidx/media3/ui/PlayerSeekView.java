@@ -307,97 +307,12 @@ public class PlayerSeekView extends FrameLayout
   }
 
   private void updateScrubViews(long positionMs) {
-    @Nullable String chapterLabel = getChapterLabel(positionMs);
     positionView.setText(getTimeString(positionMs));
-    updateChapterLabel(chapterLabel);
-    if (chapterLabel == null) {
-      hideChapterBubble();
-    } else {
-      showChapterBubble(chapterLabel, positionMs);
-    }
+    updateChapterLabel(null);
+    hideChapterBubble();
   }
 
-  private void showChapterBubble(String chapterLabel, long positionMs) {
-    if (!attached || !isShown()) {
-      hideChapterBubble();
-      return;
-    }
-    ViewGroup rootView = getChapterBubbleRoot();
-    TextView bubbleView = getChapterBubbleView();
-    Rect horizontalFrame = getChapterBubbleHorizontalFrame();
-    updateChapterBubbleSizeIfNeeded(bubbleView, chapterLabel, horizontalFrame);
-    timeBar.getLocationOnScreen(timeBarLocation);
-    rootView.getLocationOnScreen(rootLocation);
-    int left =
-        getChapterBubbleLeft(horizontalFrame, positionMs, chapterBubbleWidth) - rootLocation[0];
-    int top = getChapterBubbleTop(rootView, chapterBubbleHeight) - rootLocation[1];
-    showOrMoveChapterBubble(rootView, bubbleView, left, top);
-  }
 
-  private void updateChapterBubbleSizeIfNeeded(
-      TextView bubbleView, String chapterLabel, Rect horizontalFrame) {
-    int maxWidth =
-        Math.min(
-            chapterBubbleMaxWidth,
-            Math.max(1, horizontalFrame.width() - chapterBubbleScreenInset * 2));
-    if (chapterLabel.equals(chapterBubbleText) && chapterBubbleMeasuredMaxWidth == maxWidth) {
-      return;
-    }
-    bubbleView.setMaxWidth(maxWidth);
-    bubbleView.setText(chapterLabel);
-    bubbleView.measure(
-        MeasureSpec.makeMeasureSpec(maxWidth, MeasureSpec.AT_MOST),
-        MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED));
-    chapterBubbleText = chapterLabel;
-    chapterBubbleMeasuredMaxWidth = maxWidth;
-    chapterBubbleWidth = bubbleView.getMeasuredWidth();
-    chapterBubbleHeight = bubbleView.getMeasuredHeight();
-  }
-
-  private int getChapterBubbleLeft(Rect horizontalFrame, long positionMs, int bubbleWidth) {
-    int anchorX = timeBarLocation[0] + timeBar.getPositionXInView(positionMs);
-    int minX = horizontalFrame.left + chapterBubbleScreenInset;
-    int maxX = horizontalFrame.right - chapterBubbleScreenInset - bubbleWidth;
-    return Util.constrainValue(anchorX - bubbleWidth / 2, minX, Math.max(minX, maxX));
-  }
-
-  private int getChapterBubbleTop(View rootView, int bubbleHeight) {
-    rootView.getGlobalVisibleRect(windowVisibleFrame);
-    return Math.max(
-        windowVisibleFrame.top + chapterBubbleScreenInset,
-        timeBarLocation[1]
-            + timeBar.getProgressBarTopInView()
-            - bubbleHeight
-            - chapterBubbleMargin);
-  }
-
-  private void showOrMoveChapterBubble(ViewGroup rootView, TextView bubbleView, int left, int top) {
-    if (chapterBubbleRoot != rootView) {
-      hideChapterBubble();
-      chapterBubbleRoot = rootView;
-      rootView.getOverlay().add(bubbleView);
-    }
-    bubbleView.layout(left, top, left + chapterBubbleWidth, top + chapterBubbleHeight);
-  }
-
-  private Rect getChapterBubbleHorizontalFrame() {
-    getGlobalVisibleRect(seekVisibleFrame);
-    return seekVisibleFrame;
-  }
-
-  private ViewGroup getChapterBubbleRoot() {
-    View rootView = getRootView();
-    return rootView instanceof ViewGroup ? (ViewGroup) rootView : this;
-  }
-
-  private TextView getChapterBubbleView() {
-    if (chapterBubbleView == null) {
-      chapterBubbleView =
-          (TextView)
-              LayoutInflater.from(getContext()).inflate(R.layout.exo_chapter_bubble, this, false);
-    }
-    return chapterBubbleView;
-  }
 
   private void hideChapterBubble() {
     if (chapterBubbleRoot != null) {
