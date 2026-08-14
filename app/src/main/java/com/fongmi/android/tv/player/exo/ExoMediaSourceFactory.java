@@ -68,7 +68,7 @@ public class ExoMediaSourceFactory implements MediaSource.Factory {
     }
 
     static DataSource.Factory createUpstreamDataSourceFactory(Map<String, String> headers) {
-        HttpDataSource.Factory factory = new OkHttpDataSource.Factory(OkHttp.player());
+        HttpDataSource.Factory factory = new OkHttpDataSource.Factory(buildPlayerClient());
         factory.setDefaultRequestProperties(headers);
         return new DefaultDataSource.Factory(App.get(), factory);
     }
@@ -131,7 +131,12 @@ public class ExoMediaSourceFactory implements MediaSource.Factory {
     }
 
     private HttpDataSource.Factory getHttpDataSourceFactory() {
-        if (httpDataSourceFactory == null) httpDataSourceFactory = new OkHttpDataSource.Factory(OkHttp.player());
+        if (httpDataSourceFactory == null) httpDataSourceFactory = new OkHttpDataSource.Factory(buildPlayerClient());
         return httpDataSourceFactory;
+    }
+
+    /** 播放器专用 OkHttpClient: 挂 m3u8 广告净化拦截器 (不影响 API 请求) */
+    private static okhttp3.OkHttpClient buildPlayerClient() {
+        return OkHttp.player().newBuilder().addInterceptor(new M3u8AdInterceptor()).build();
     }
 }
