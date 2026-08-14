@@ -1387,13 +1387,13 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         updateVideoResolution(size);
     }
 
-    /** 在播放画面左上角显示当前视频分辨率 (如 1280x720) */
+    /** 在控制栏显示当前视频分辨率 (如 1280x720, 与投屏按钮同排) */
     private void updateVideoResolution(VideoSize size) {
         if (size != null && size.width > 0 && size.height > 0) {
-            mBinding.videoResolution.setText(size.width + "x" + size.height);
-            mBinding.videoResolution.setVisibility(View.VISIBLE);
+            mBinding.control.videoResolution.setText(size.width + "x" + size.height);
+            mBinding.control.videoResolution.setVisibility(View.VISIBLE);
         } else {
-            mBinding.videoResolution.setVisibility(View.GONE);
+            mBinding.control.videoResolution.setVisibility(View.GONE);
         }
     }
 

@@ -839,6 +839,17 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
     }
 
     @Override
+    protected void onSizeChanged(androidx.media3.common.VideoSize size) {
+        super.onSizeChanged(size);
+        if (size != null && size.width > 0 && size.height > 0) {
+            mBinding.control.videoResolution.setText(size.width + "x" + size.height);
+            mBinding.control.videoResolution.setVisibility(View.VISIBLE);
+        } else {
+            mBinding.control.videoResolution.setVisibility(View.GONE);
+        }
+    }
+
+    @Override
     protected void onReclaim() {
         mLive.refresh();
     }
