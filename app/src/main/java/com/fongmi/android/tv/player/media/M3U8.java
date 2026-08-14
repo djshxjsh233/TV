@@ -11,63 +11,74 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * M3U8 广告净化工具 —— 完整移植自 TVBox (com.github.tvbox.osc.util.M3U8)
- * 原理: 播放器解析 m3u8 之前, 先剔除广告分片(少数派域名/广告分段/时长匹配), 播放时丝滑无广告。
- * 相比 media3 内置 adblock(播放中跳过会卡), 本方案是"播放前净化", 不卡顿。
+ * M3U8 广告净化工具 —— 完整移植自 TVBoxOS (q215613905/TVBoxOS) 最新维护版
+ * 作者: asdfgh, FongMi
+ * 原理: 播放器解析 m3u8 之前剔除广告分片, 播放时丝滑无广告。
+ * 核心:
+ * 1. removeMinorityUrl: URL 前缀/域名统计, 删除少数派(广告)
+ * 2. cleanCommonAdMarkers: 识别 CUE-OUT/CUE-IN、SCTE35 等广告标记, 删除广告区间
+ * 3. cleanDiscontinuityGroups: 按 DISCONTINUITY 分组, 整组删除广告组(含标记), 保证播放器时间轴连续无缝
+ * 4. 广告特征: URL 关键词正则 + 广告域名黑名单
+ * 5. 安全校验: 删除比例>30%放弃 / >50%回退原内容 / isPlayableMediaPlaylist 校验
  */
 public class M3U8 {
-
     private static final String TAG_DISCONTINUITY = "#EXT-X-DISCONTINUITY";
     private static final String TAG_MEDIA_DURATION = "#EXTINF";
     private static final String TAG_ENDLIST = "#EXT-X-ENDLIST";
     private static final String TAG_KEY = "#EXT-X-KEY";
-    /** 统计用: 与 m3u8 同目录的分片归一标记 */
-    private static final String SAME_DIR = "://same-dir/";
+    private static final String TAG_MAP = "#EXT-X-MAP";
+    private static final String TAG_CUE_OUT = "#EXT-X-CUE-OUT";
+    private static final String TAG_CUE_IN = "#EXT-X-CUE-IN";
+    private static final String TAG_DATERANGE = "#EXT-X-DATERANGE";
 
     private static final Pattern REGEX_X_DISCONTINUITY = Pattern.compile("#EXT-X-DISCONTINUITY[\\s\\S]*?(?=#EXT-X-DISCONTINUITY|$)");
     private static final Pattern REGEX_MEDIA_DURATION = Pattern.compile(TAG_MEDIA_DURATION + ":([\\d\\.]+)\\b");
     private static final Pattern REGEX_URI = Pattern.compile("URI=\"(.+?)\"");
+
+    /** 广告片段 URL 特征识别 */
+    private static final Pattern REGEX_AD_SEGMENT_URI = Pattern.compile("(?i)(^|[/?&=_.-])(ads?|adv|advert(ise(ment)?)?|commercial|preroll|pre-roll|midroll|mid-roll|postroll|post-roll|sponsor|scte|vast|vmap|interstitial|bumper)([/?&=_.-]|$)");
+
+    /** 广告域名特征 (常见广告CDN) */
+    private static final String[] AD_DOMAIN_KEYWORDS = {
+            "adservice", "adserver", "adsystem", "doubleclick", "googlesyndication",
+            "advertising", "2mdn.net", "moatads", "scorecardresearch", "quantserve"
+    };
+
     public static int currentAdCount;
 
     public static boolean isAd(String regex) {
-        return regex.contains(TAG_DISCONTINUITY) || regex.contains(TAG_MEDIA_DURATION) || regex.contains(TAG_ENDLIST) || regex.contains(TAG_KEY) || M3U8.isDouble(regex);
+        return regex.contains(TAG_DISCONTINUITY) || regex.contains(TAG_MEDIA_DURATION) || regex.contains(TAG_ENDLIST) || regex.contains(TAG_KEY) || regex.contains(TAG_CUE_OUT) || regex.contains(TAG_CUE_IN) || regex.contains(TAG_DATERANGE) || M3U8.isDouble(regex);
     }
 
     public static String purify(String tsUrlPre, String m3u8content) {
+        long start = System.currentTimeMillis();
         currentAdCount = 0;
         if (null == m3u8content || m3u8content.length() == 0) return null;
+        if (m3u8content.startsWith("\ufeff")) m3u8content = m3u8content.substring(1);
         if (!m3u8content.startsWith("#EXTM3U")) return null;
+
+        int totalSegments = 0;
+        String[] lines = m3u8content.split(m3u8content.contains("\r\n") ? "\r\n" : "\n");
+        for (String line : lines) {
+            if (line.length() > 0 && line.charAt(0) != '#') totalSegments++;
+        }
+
         String result = removeMinorityUrl(tsUrlPre, m3u8content);
-        if (result == null) result = get(tsUrlPre, m3u8content);
-        if (result != null) return absolutize(tsUrlPre, result);
-        return null;
-    }
+        if (result != null && currentAdCount > 0) result = get(tsUrlPre, result);
+        else result = get(tsUrlPre, m3u8content);
+        result = keepVodEndList(m3u8content, result);
 
-    /** 把净化后 m3u8 里的相对路径分片/KEY 转为绝对 URL (基于 tsUrlPre 目录), 供本地代理播放 */
-    private static String absolutize(String base, String m3u8) {
-        StringBuilder sb = new StringBuilder();
-        for (String line : m3u8.split("\n")) {
-            String resolved = line;
-            if (line.startsWith(TAG_KEY)) {
-                Matcher matcher = REGEX_URI.matcher(line);
-                String value = matcher.find() ? matcher.group(1) : null;
-                if (value != null && !value.startsWith("http://") && !value.startsWith("https://")) {
-                    resolved = line.replace(value, resolvePath(base, value));
-                }
-            } else if (!line.startsWith("#") && !line.startsWith("http://") && !line.startsWith("https://")) {
-                resolved = resolvePath(base, line);
-            }
-            sb.append(resolved).append("\n");
+        // 安全校验: 删除过多则回退原内容
+        if (totalSegments > 0 && currentAdCount > totalSegments * 0.5) {
+            currentAdCount = 0;
+            result = m3u8content;
         }
-        return sb.toString();
-    }
-
-    private static String resolvePath(String base, String path) {
-        if (path.startsWith("/")) {
-            int idx = base.indexOf('/', 9);
-            return idx > 0 ? base.substring(0, idx) + path : path;
+        if (currentAdCount > 0 && !isPlayableMediaPlaylist(result)) {
+            currentAdCount = 0;
+            result = m3u8content;
         }
-        return base + path;
+        android.util.Log.i("M3u8Ad", "净化耗时: " + (System.currentTimeMillis() - start) + "ms, 移除: " + currentAdCount + " 分片");
+        return result;
     }
 
     private static double maxPercent(HashMap<String, Integer> preUrlMap) {
@@ -79,122 +90,377 @@ public class M3U8 {
         return maxTimes * 1.0 / (totalTimes * 1.0);
     }
 
-    private static int timesNoAd = 15; // 出现超过多少次的域名不认为是广告
+    private static int timesNoAd = 15;
 
     private static String removeMinorityUrl(String tsUrlPre, String m3u8content) {
-        // 旧版3.5.7同款算法: 按 #EXT-X-DISCONTINUITY 分段, 段总时长显著短于平均的段视为广告整段删除
-        // (广告段通常很短; 删除总量限制防误删; 段级删除保证播放器时间轴连续不卡广告时长)
         String linesplit = "\n";
         if (m3u8content.contains("\r\n")) linesplit = "\r\n";
         String[] lines = m3u8content.split(linesplit);
-        boolean hasDiscontinuity = false;
-        for (String line : lines) if (line.startsWith(TAG_DISCONTINUITY)) { hasDiscontinuity = true; break; }
-        if (!hasDiscontinuity) return null; // 无 DISCONTINUITY 分段标记, 不做段级判断
 
-        // 分段: 每段累加 EXTINF 时长, 记录每段前是否有 DISCONTINUITY 标记
-        List<BigDecimal> durations = new ArrayList<>();
-        List<String> segments = new ArrayList<>();
-        List<Boolean> segHasDis = new ArrayList<>();
-        StringBuilder current = new StringBuilder();
-        BigDecimal currentDuration = BigDecimal.ZERO;
-        boolean hasDis = false;
+        int totalSegments = 0;
         for (String line : lines) {
-            if (line.startsWith(TAG_DISCONTINUITY)) {
-                // 记录: 当前正在累积的段(若有)之前有标记; 下一段前也有标记
-                if (current.length() > 0) {
-                    segments.add(current.toString());
-                    durations.add(currentDuration);
-                    segHasDis.add(hasDis);
-                    current = new StringBuilder();
-                    currentDuration = BigDecimal.ZERO;
+            if (line.length() > 0 && line.charAt(0) != '#') totalSegments++;
+        }
+
+        // First pass: count normalized media path prefixes.
+        HashMap<String, Integer> preUrlMap = new HashMap<>();
+        for (String line : lines) {
+            if (line.length() == 0 || line.charAt(0) == '#') continue;
+            String absoluteUrl = toAbsoluteUrl(tsUrlPre, line);
+            int ilast = absoluteUrl.lastIndexOf('.');
+            if (ilast <= 4) continue;
+            String preUrl = absoluteUrl.substring(0, ilast - 4);
+            Integer cnt = preUrlMap.get(preUrl);
+            preUrlMap.put(preUrl, cnt != null ? cnt + 1 : 1);
+        }
+        if (preUrlMap.size() <= 1) return null;
+        boolean domainFiltering = false;
+        if (maxPercent(preUrlMap) < 0.8) {
+            // Fallback to dominant host filtering.
+            preUrlMap.clear();
+            for (String line : lines) {
+                if (line.length() == 0 || line.charAt(0) == '#') continue;
+                String absoluteUrl = toAbsoluteUrl(tsUrlPre, line);
+                if (!absoluteUrl.startsWith("http://") && !absoluteUrl.startsWith("https://")) return null;
+                int ifirst = absoluteUrl.indexOf('/', 9);
+                if (ifirst <= 0) continue;
+                String preUrl = absoluteUrl.substring(0, ifirst);
+                Integer cnt = preUrlMap.get(preUrl);
+                preUrlMap.put(preUrl, cnt != null ? cnt + 1 : 1);
+            }
+            if (preUrlMap.size() <= 1) return null;
+            if (maxPercent(preUrlMap) < 0.8) return null;
+            boolean allDomainsExceedThreshold = true;
+            for (Integer count : preUrlMap.values()) {
+                if (count <= 15) {
+                    allDomainsExceedThreshold = false;
+                    break;
                 }
-                hasDis = true; // 下一段前有 DISCONTINUITY
+            }
+            if (allDomainsExceedThreshold) return null;
+            domainFiltering = true;
+        }
+
+        // Keep the most common media prefix or host.
+        int maxTimes = 0;
+        String maxTimesPreUrl = "";
+        for (Map.Entry<String, Integer> entry : preUrlMap.entrySet()) {
+            if (entry.getValue() > maxTimes) {
+                maxTimesPreUrl = entry.getKey();
+                maxTimes = entry.getValue();
+            }
+        }
+        if (maxTimes == 0) return null;
+
+        StringBuilder filtered = new StringBuilder();
+        List<String> pendingSegmentTags = new ArrayList<>();
+        for (int i = 0; i < lines.length; ++i) {
+            String item = lines[i].trim();
+            if (item.length() == 0) {
+                if (pendingSegmentTags.isEmpty()) appendLine(filtered, lines[i], linesplit);
+                else pendingSegmentTags.add(lines[i]);
                 continue;
             }
-            if (current.length() == 0 && segments.isEmpty() && !hasDis) {
-                // 首段无标记
-            }
-            current.append(line).append(linesplit);
-            if (line.startsWith(TAG_MEDIA_DURATION)) {
-                Matcher m = REGEX_MEDIA_DURATION.matcher(line);
-                if (m.find()) {
-                    try { currentDuration = currentDuration.add(new BigDecimal(m.group(1))); } catch (Exception ignored) {}
+            if (item.charAt(0) == '#') {
+                String output = hasUriAttribute(item) ? resolveUriLine(tsUrlPre, lines[i]) : lines[i];
+                if (isSegmentTag(item)) pendingSegmentTags.add(output);
+                else {
+                    flush(filtered, pendingSegmentTags, linesplit);
+                    appendLine(filtered, output, linesplit);
                 }
+                continue;
+            }
+
+            String absoluteUrl = toAbsoluteUrl(tsUrlPre, lines[i]);
+            if (shouldKeepMediaUrl(absoluteUrl, domainFiltering, maxTimesPreUrl, preUrlMap)) {
+                flush(filtered, pendingSegmentTags, linesplit);
+                appendLine(filtered, absoluteUrl, linesplit);
+            } else {
+                pendingSegmentTags.clear();
+                currentAdCount += 1;
             }
         }
-        if (current.length() > 0) {
-            segments.add(current.toString());
-            durations.add(currentDuration);
-            segHasDis.add(hasDis);
+
+        // Safety check: if removal ratio is too high, likely a false positive
+        if (totalSegments > 0 && currentAdCount > totalSegments * 0.3) {
+            currentAdCount = 0;
+            return null;
         }
-        if (segments.size() < 2) return null;
 
-        // 分片总数 <= 100 不净化 (旧版3.5.7同款门槛, 防误删短视频)
-        int segCount = 0;
-        for (String seg : segments) for (String l : seg.split(linesplit)) if (!l.startsWith("#") && !l.trim().isEmpty()) segCount++;
-        if (segCount <= 100) return null;
+        return normalizeMediaPlaylist(filtered.toString());
+    }
 
-        // 平均段时长
-        BigDecimal total = BigDecimal.ZERO;
-        for (BigDecimal d : durations) total = total.add(d);
-        BigDecimal avg = total.divide(BigDecimal.valueOf(segments.size()), 2, java.math.RoundingMode.HALF_UP);
+    private static String get(String tsUrlPre, String m3u8Content) {
+        String line = resolveContent(tsUrlPre, m3u8Content);
+        line = cleanCommonAdMarkers(tsUrlPre, line);
+        return cleanDiscontinuityGroups(tsUrlPre, line);
+    }
 
-        // 判定广告段: 段时长 < 60s 且 平均 > 段时长*2 且 段时长 < 平均
-        // 或 段内分片 URL 与主流编辑距离过大 (旧版3.5.7同款, 识别同目录不同文件名的广告)
-        int removedSeconds = 0;
-        boolean[] delSegment = new boolean[segments.size()];
-        String mainUrl = firstUrl(segments.get(0));
-        for (int i = 0; i < segments.size(); i++) {
-            BigDecimal d = durations.get(i);
-            int sec = d.intValue();
-            boolean shortAd = sec < 60 && avg.intValue() > sec * 2 && d.compareTo(avg) < 0;
-            boolean urlDiff = false;
-            String segUrl = firstUrl(segments.get(i));
-            if (mainUrl != null && segUrl != null) {
-                int dist = levenshtein(mainUrl, segUrl);
-                urlDiff = dist > mainUrl.length() / 2; // 编辑距离超过主流URL一半视为不同来源
-            }
-            if (shortAd || urlDiff) {
-                delSegment[i] = true;
-                removedSeconds += sec;
-            }
-        }
-        // 删除总量 > 180s 放弃 (防误删)
-        if (removedSeconds == 0 || removedSeconds > 180) return null;
-        currentAdCount += removedSeconds;
-
-        // 重组: 跳过广告段, 按原样恢复 DISCONTINUITY 标记 (media3 用它分配独立时间戳调整器平滑PTS跳变)
+    private static String resolveContent(String tsUrlPre, String m3u8Content) {
+        m3u8Content = m3u8Content.replaceAll("\r\n", "\n");
         StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < segments.size(); i++) {
-            if (delSegment[i]) continue;
-            if (segHasDis.get(i)) sb.append(TAG_DISCONTINUITY).append(linesplit);
-            sb.append(segments.get(i));
+        for (String line : m3u8Content.split("\n")) {
+            sb.append(shouldResolve(line) ? resolve(tsUrlPre, line.trim()) : line).append("\n");
         }
         return sb.toString();
     }
 
-
-    private static String get(String tsUrlPre, String m3u8Content) {
-        m3u8Content = m3u8Content.replaceAll("\r\n", "\n");
+    private static String cleanCommonAdMarkers(String tsUrlPre, String m3u8Content) {
+        String line = resolveContent(tsUrlPre, m3u8Content);
         StringBuilder sb = new StringBuilder();
-        for (String line : m3u8Content.split("\n")) sb.append(shouldResolve(line) ? resolve(tsUrlPre, line) : line).append("\n");
-        List<String> ads = getRegex(tsUrlPre);
-        if (ads == null || ads.isEmpty()) return null;
-        return clean(sb.toString(), ads);
-    }
+        List<String> pending = new ArrayList<>();
+        boolean inAdBreak = false;
+        boolean changed = false;
 
-    private static List<String> getRegex(String tsUrlPre) {
-        // 无解析规则表时返回 null, 走 removeMinorityUrl 主路径
-        return null;
-    }
+        for (String raw : line.split("\n", -1)) {
+            String item = raw.trim();
+            if (item.length() == 0) {
+                if (pending.isEmpty()) sb.append(raw).append("\n");
+                else pending.add(raw);
+                continue;
+            }
+            if (item.startsWith("#")) {
+                if (item.startsWith(TAG_CUE_IN)) {
+                    if (inAdBreak || hasAdSignal(pending)) {
+                        inAdBreak = false;
+                        pending.clear();
+                        changed = true;
+                        continue;
+                    }
+                }
+                if (isAdBreakStart(item)) {
+                    flush(sb, pending);
+                    inAdBreak = true;
+                    pending.add(raw);
+                    changed = true;
+                    continue;
+                }
+                if (inAdBreak) {
+                    pending.add(raw);
+                    changed = true;
+                    continue;
+                }
+                if (isStandaloneAdTag(item)) {
+                    flush(sb, pending);
+                    currentAdCount += 1;
+                    changed = true;
+                    continue;
+                }
+                if (isSegmentTag(item) || isAdSignalTag(item)) {
+                    pending.add(raw);
+                } else {
+                    flush(sb, pending);
+                    sb.append(raw).append("\n");
+                }
+                continue;
+            }
 
-    private static String clean(String line, List<String> ads) {
-        boolean scan = false;
-        for (String ad : ads) {
-            if (ad.contains(TAG_DISCONTINUITY) || ad.contains(TAG_MEDIA_DURATION)) line = scanAd(line, ad);
-            else if (isDouble(ad)) scan = true;
+            // URL 特征和域名特征
+            if (inAdBreak || hasAdSignal(pending) || isAdSegmentUri(item) || hasAdDomain(item)) {
+                pending.clear();
+                currentAdCount += 1;
+                changed = true;
+                continue;
+            }
+            flush(sb, pending);
+            sb.append(raw).append("\n");
         }
-        return scan ? scan(line, ads) : line;
+
+        if (!inAdBreak) flush(sb, pending);
+        return changed ? sb.toString() : line;
+    }
+
+    private static void flush(StringBuilder sb, List<String> pending) {
+        for (String line : pending) sb.append(line).append("\n");
+        pending.clear();
+    }
+
+    private static void flush(StringBuilder sb, List<String> pending, String linesplit) {
+        for (String line : pending) appendLine(sb, line, linesplit);
+        pending.clear();
+    }
+
+    private static void appendLine(StringBuilder sb, String line, String linesplit) {
+        sb.append(line).append(linesplit);
+    }
+
+    private static boolean hasAdSignal(List<String> pending) {
+        for (String line : pending) {
+            if (isAdBreakStart(line.trim()) || isAdSignalTag(line.trim())) return true;
+        }
+        return false;
+    }
+
+    private static boolean isAdBreakStart(String line) {
+        return line.startsWith(TAG_CUE_OUT);
+    }
+
+    private static boolean isAdSignalTag(String line) {
+        if (line.startsWith("#EXT-OATCLS-SCTE35")) return true;
+        if (line.startsWith("#EXT-X-SCTE35")) return true;
+        if (line.startsWith("#EXT-X-SPLICEPOINT-SCTE35")) return true;
+        if (line.startsWith("#EXT-X-CUE")) return true;
+        if (line.startsWith("#EXT-X-ASSET")) return true;
+        if (line.startsWith("#EXT-X-VMAP-AD-BREAK")) return true;
+        if (line.startsWith("#EXT-X-AD")) return true;
+        return false;
+    }
+
+    private static boolean isSegmentTag(String line) {
+        if (line.startsWith("#EXT-X-DISCONTINUITY-SEQUENCE")) return false;
+        return line.startsWith(TAG_MEDIA_DURATION) || line.startsWith("#EXT-X-BYTERANGE") || line.startsWith("#EXT-X-PROGRAM-DATE-TIME") || line.startsWith("#EXT-X-DISCONTINUITY") || line.startsWith("#EXT-X-PART") || line.startsWith("#EXT-X-PRELOAD-HINT");
+    }
+
+    private static boolean isStandaloneAdTag(String line) {
+        if (!line.startsWith(TAG_DATERANGE)) return false;
+        return isAdLikeText(line) || line.contains("X-ASSET-URI") || line.contains("X-ASSET-LIST");
+    }
+
+    private static boolean isAdLikeText(String line) {
+        String lower = line.toLowerCase();
+        return lower.contains("scte") || lower.contains("cue") || lower.contains("interstitial") ||
+                lower.contains("vmap") || lower.contains("vast") || lower.contains("advert") ||
+                lower.contains("commercial") || lower.contains("ad-") || lower.contains("ad_") ||
+                lower.contains("ad.") || lower.contains("preroll") || lower.contains("midroll") ||
+                lower.contains("postroll") || lower.contains("bumper");
+    }
+
+    private static boolean isAdSegmentUri(String line) {
+        return REGEX_AD_SEGMENT_URI.matcher(line).find();
+    }
+
+    private static boolean hasAdDomain(String url) {
+        String lower = url.toLowerCase();
+        for (String keyword : AD_DOMAIN_KEYWORDS) {
+            if (lower.contains(keyword)) return true;
+        }
+        return false;
+    }
+
+    /** 按 DISCONTINUITY 分组, 整组删除广告组 (含标记) —— 保证播放器时间轴连续无缝 */
+    private static String cleanDiscontinuityGroups(String tsUrlPre, String m3u8Content) {
+        String line = resolveContent(tsUrlPre, m3u8Content);
+        String[] lines = line.split("\n");
+        List<Group> groups = buildDiscontinuityGroups(lines);
+        if (groups.size() < 3) return line;
+        Group main = findMainGroup(groups);
+        if (main == null || main.segmentCount < 3) return line;
+
+        StringBuilder sb = new StringBuilder();
+        boolean changed = false;
+        for (Group group : groups) {
+            if (shouldDropGroup(group, main)) {
+                currentAdCount += group.segmentCount;
+                changed = true;
+                continue;
+            }
+            group.appendTo(sb);
+        }
+        return changed ? sb.toString() : line;
+    }
+
+    private static List<Group> buildDiscontinuityGroups(String[] lines) {
+        List<Group> groups = new ArrayList<>();
+        Group group = new Group();
+        for (String raw : lines) {
+            String line = raw.trim();
+            if (line.startsWith(TAG_DISCONTINUITY) && group.hasMedia()) {
+                groups.add(group);
+                group = new Group();
+            }
+            group.add(raw);
+        }
+        if (group.hasMedia() || !group.lines.isEmpty()) groups.add(group);
+        return groups;
+    }
+
+    private static Group findMainGroup(List<Group> groups) {
+        Group main = null;
+        for (Group group : groups) {
+            if (group.segmentCount == 0) continue;
+            if (main == null || group.score() > main.score()) main = group;
+        }
+        return main;
+    }
+
+    private static boolean shouldDropGroup(Group group, Group main) {
+        if (group == main || group.segmentCount == 0) return false;
+
+        boolean shortGroup = group.segmentCount <= 2 ||
+                (main.totalDuration > 0 && group.totalDuration > 0 &&
+                        group.totalDuration < main.totalDuration * 0.18);
+
+        boolean differentHost = main.host.length() > 0 && group.host.length() > 0 &&
+                !main.host.equals(group.host);
+
+        boolean differentPath = main.pathPrefix.length() > 0 && group.pathPrefix.length() > 0 &&
+                !main.pathPrefix.equals(group.pathPrefix);
+
+        boolean hasAdFeature = group.adLikeCount > 0 || hasAdDomain(group.host) ||
+                isAdSegmentUri(group.pathPrefix);
+
+        // 增强: 短组(时长显著小于主组)且路径不同 → 广告 (不限分片数, 兼容多片广告段如bfzy adjump)
+        boolean shortDifferentPath = shortGroup && differentPath;
+
+        boolean adLike = hasAdFeature || differentHost || shortDifferentPath;
+
+        return shortGroup && adLike;
+    }
+
+    private static String hostOf(String url) {
+        if (!url.startsWith("http://") && !url.startsWith("https://")) return "";
+        int start = url.indexOf("://") + 3;
+        int end = url.indexOf('/', start);
+        return end > start ? url.substring(start, end) : url.substring(start);
+    }
+
+    private static String pathPrefixOf(String url) {
+        String clean = url;
+        int query = clean.indexOf('?');
+        if (query >= 0) clean = clean.substring(0, query);
+        int slash = clean.lastIndexOf('/');
+        return slash > 0 ? clean.substring(0, slash + 1) : "";
+    }
+
+    private static class Group {
+        private final List<String> lines = new ArrayList<>();
+        private int segmentCount = 0;
+        private int adLikeCount = 0;
+        private double totalDuration = 0;
+        private String host = "";
+        private String pathPrefix = "";
+
+        private void add(String raw) {
+            lines.add(raw);
+            String line = raw.trim();
+            Matcher matcher = REGEX_MEDIA_DURATION.matcher(line);
+            if (matcher.find()) {
+                try {
+                    totalDuration += Double.parseDouble(matcher.group(1));
+                } catch (Exception ignored) {
+                }
+            }
+            if (line.length() == 0 || line.startsWith("#")) {
+                if (isAdSignalTag(line) || isStandaloneAdTag(line)) adLikeCount += 1;
+                return;
+            }
+            segmentCount += 1;
+            if (isAdSegmentUri(line) || hasAdDomain(line)) adLikeCount += 1;
+            if (host.length() == 0) host = hostOf(line);
+            if (pathPrefix.length() == 0) pathPrefix = pathPrefixOf(line);
+        }
+
+        private boolean hasMedia() {
+            return segmentCount > 0;
+        }
+
+        private void appendTo(StringBuilder sb) {
+            for (String line : lines) sb.append(line).append("\n");
+        }
+
+        private double score() {
+            return totalDuration > 0 ? totalDuration : segmentCount;
+        }
     }
 
     private static String scanAd(String line, String TAG_AD) {
@@ -232,14 +498,12 @@ public class M3U8 {
             for (String ad : ads) {
                 if (ad.startsWith("-")) {
                     String adClean = ad.substring(1);
-                    // 匹配最后一条切片
                     if (ltStr.startsWith(adClean)) {
                         needRemoveAd.add(groupCleaned);
                         currentAdCount += tCount;
                         break;
                     }
                 } else {
-                    // 匹配第一条切片或广告切片总时长
                     if (ftStr.startsWith(ad) || tStr.startsWith(ad)) {
                         needRemoveAd.add(groupCleaned);
                         currentAdCount += tCount;
@@ -260,59 +524,123 @@ public class M3U8 {
         }
     }
 
-    /** 取段内第一个分片 URL (绝对或相对) */
-    private static String firstUrl(String segment) {
-        for (String line : segment.split("\n")) {
-            if (line.length() == 0 || line.charAt(0) == '#') continue;
-            return line;
-        }
-        return null;
-    }
-
-    /** Levenshtein 编辑距离 (旧版3.5.7 d2/m.e 同款) */
-    private static int levenshtein(String a, String b) {
-        int m = a.length(), n = b.length();
-        if (m == 0) return n;
-        if (n == 0) return m;
-        int[] prev = new int[n + 1];
-        int[] curr = new int[n + 1];
-        for (int j = 0; j <= n; j++) prev[j] = j;
-        for (int i = 1; i <= m; i++) {
-            curr[0] = i;
-            for (int j = 1; j <= n; j++) {
-                int cost = a.charAt(i - 1) == b.charAt(j - 1) ? 0 : 1;
-                curr[j] = Math.min(Math.min(curr[j - 1] + 1, prev[j] + 1), prev[j - 1] + cost);
-            }
-            int[] tmp = prev; prev = curr; curr = tmp;
-        }
-        return prev[n];
-    }
-
-    /** 提取分片 URL 的父路径: 绝对 URL 取 域名+目录; 无斜杠相对路径(同目录)返回 null; 以/开头的返回其目录 */
-    private static String parentPath(String line) {
-        if (line.startsWith("http://") || line.startsWith("https://")) {
-            int last = line.lastIndexOf('/');
-            if (last <= 9) return null;
-            return line.substring(0, last + 1);
-        }
-        if (line.startsWith("/")) {
-            int last = line.lastIndexOf('/');
-            if (last > 1) return line.substring(0, last + 1);
-        }
-        return null; // 同目录分片
-    }
-
     private static boolean shouldResolve(String line) {
-        return (!line.startsWith("#") && !line.startsWith("http")) || line.startsWith(TAG_KEY);
+        String item = line.trim();
+        if (item.length() == 0) return false;
+        return (!item.startsWith("#") && !item.startsWith("http")) || hasUriAttribute(item);
     }
 
     private static String resolve(String base, String line) {
-        if (line.startsWith(TAG_KEY)) {
-            Matcher matcher = REGEX_URI.matcher(line);
-            String value = matcher.find() ? matcher.group(1) : null;
-            return value == null ? line : line.replace(value, UriUtil.resolve(base, value));
+        if (hasUriAttribute(line)) {
+            return resolveUriLine(base, line);
         } else {
             return UriUtil.resolve(base, line);
+        }
+    }
+
+    private static boolean hasUriAttribute(String line) {
+        return line.contains("URI=\"") && (line.contains(TAG_KEY) || line.contains(TAG_MAP));
+    }
+
+    private static String resolveUriLine(String base, String line) {
+        Matcher matcher = REGEX_URI.matcher(line);
+        if (!matcher.find()) return line;
+        String value = matcher.group(1);
+        if (value == null) return line;
+        String resolved = value.startsWith("http://") || value.startsWith("https://") ? value : UriUtil.resolve(base, value);
+        return line.replace("URI=\"" + value + "\"", "URI=\"" + resolved + "\"");
+    }
+
+    private static String normalizeMediaPlaylist(String content) {
+        StringBuilder sb = new StringBuilder();
+        boolean seenMedia = false;
+        boolean hasPendingDiscontinuity = false;
+        String pendingDiscontinuity = "";
+        for (String raw : content.replaceAll("\r\n", "\n").split("\n", -1)) {
+            String item = raw.trim();
+            if (isDiscontinuityTag(item)) {
+                if (seenMedia && !hasPendingDiscontinuity) {
+                    pendingDiscontinuity = raw;
+                    hasPendingDiscontinuity = true;
+                }
+                continue;
+            }
+            if (hasPendingDiscontinuity) {
+                if (item.length() == 0) continue;
+                if (!item.startsWith(TAG_ENDLIST)) sb.append(pendingDiscontinuity).append("\n");
+                hasPendingDiscontinuity = false;
+            }
+            if (item.length() == 0 && sb.length() == 0) continue;
+            sb.append(raw).append("\n");
+            if (isMediaUriLine(item)) seenMedia = true;
+        }
+        return sb.toString();
+    }
+
+    private static boolean isPlayableMediaPlaylist(String content) {
+        if (content == null || !content.startsWith("#EXTM3U")) return false;
+        int mediaCount = 0;
+        boolean pendingExtInf = false;
+        for (String raw : content.replaceAll("\r\n", "\n").split("\n")) {
+            String line = raw.trim();
+            if (line.length() == 0) continue;
+            if (line.startsWith(TAG_MEDIA_DURATION)) {
+                if (pendingExtInf) return false;
+                pendingExtInf = true;
+            } else if (isMediaUriLine(line)) {
+                mediaCount += 1;
+                pendingExtInf = false;
+            } else if (line.startsWith(TAG_ENDLIST) && pendingExtInf) {
+                return false;
+            }
+        }
+        return mediaCount > 0 && !pendingExtInf;
+    }
+
+    private static String keepVodEndList(String original, String result) {
+        if (result == null) return null;
+        if (!hasEndList(original) || hasEndList(result)) return result;
+        return result + (result.endsWith("\n") ? "" : "\n") + TAG_ENDLIST + "\n";
+    }
+
+    private static boolean hasEndList(String content) {
+        if (content == null) return false;
+        for (String raw : content.replaceAll("\r\n", "\n").split("\n")) {
+            if (raw.trim().startsWith(TAG_ENDLIST)) return true;
+        }
+        return false;
+    }
+
+    private static boolean isMediaUriLine(String line) {
+        return line.length() > 0 && !line.startsWith("#");
+    }
+
+    private static boolean isDiscontinuityTag(String line) {
+        return line.startsWith(TAG_DISCONTINUITY) && !line.startsWith("#EXT-X-DISCONTINUITY-SEQUENCE");
+    }
+
+    private static String toAbsoluteUrl(String base, String url) {
+        if (url.startsWith("http://") || url.startsWith("https://")) return url;
+        if (url.startsWith("/")) {
+            int idx = base.indexOf('/', 9);
+            return idx > 0 ? base.substring(0, idx) + url : url;
+        }
+        return base + url;
+    }
+
+    private static boolean shouldKeepMediaUrl(String absoluteUrl, boolean domainFiltering, String maxTimesPreUrl, HashMap<String, Integer> preUrlMap) {
+        if (!domainFiltering) {
+            if (absoluteUrl.startsWith(maxTimesPreUrl)) return true;
+            int ilast = absoluteUrl.lastIndexOf('.');
+            if (ilast <= 4) return false;
+            String preUrl = absoluteUrl.substring(0, ilast - 4);
+            Integer cnt = preUrlMap.get(preUrl);
+            return cnt != null && cnt > 1;
+        } else {
+            int ifirst = absoluteUrl.indexOf('/', 9);
+            String domain = ifirst > 0 ? absoluteUrl.substring(0, ifirst) : absoluteUrl;
+            Integer cnt = preUrlMap.get(domain);
+            return domain.equals(maxTimesPreUrl) || (cnt != null && cnt > timesNoAd);
         }
     }
 
