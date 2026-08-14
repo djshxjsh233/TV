@@ -46,6 +46,8 @@ public class M3u8AdInterceptor implements Interceptor {
             // 非 200 完整响应(如 206 部分内容)不净化
             if (response.code() != 200) return response;
             String url = request.url().toString();
+            // 本地代理请求 (已净化内容) 直接放行, 避免二次处理
+            if (url.contains("127.0.0.1") || url.contains("localhost")) return response;
             String contentType = response.header("Content-Type");
             boolean isM3u8 = url.contains(".m3u8") || (contentType != null && contentType.contains("mpegurl"));
             if (!isM3u8) return response;

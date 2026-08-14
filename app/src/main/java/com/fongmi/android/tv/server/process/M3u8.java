@@ -37,7 +37,11 @@ public class M3u8 implements Process {
 
     @Override
     public Response doResponse(IHTTPSession session, String url, Map<String, String> files) {
-        if (hasContent()) return Nano.ok(content);
+        if (hasContent()) {
+            Response response = Nano.ok(content);
+            response.setMimeType("application/vnd.apple.mpegurl");
+            return response;
+        }
         return Nano.error("m3u8 content empty");
     }
 }

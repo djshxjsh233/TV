@@ -38,9 +38,36 @@ public class M3U8 {
         if (null == m3u8content || m3u8content.length() == 0) return null;
         if (!m3u8content.startsWith("#EXTM3U")) return null;
         String result = removeMinorityUrl(tsUrlPre, m3u8content);
-        if (result != null) return result;
-        result = get(tsUrlPre, m3u8content);
-        return result;
+        if (result == null) result = get(tsUrlPre, m3u8content);
+        if (result != null) return absolutize(tsUrlPre, result);
+        return null;
+    }
+
+    /** 把净化后 m3u8 里的相对路径分片/KEY 转为绝对 URL (基于 tsUrlPre 目录), 供本地代理播放 */
+    private static String absolutize(String base, String m3u8) {
+        StringBuilder sb = new StringBuilder();
+        for (String line : m3u8.split("\n")) {
+            String resolved = line;
+            if (line.startsWith(TAG_KEY)) {
+                Matcher matcher = REGEX_URI.matcher(line);
+                String value = matcher.find() ? matcher.group(1) : null;
+                if (value != null && !value.startsWith("http://") && !value.startsWith("https://")) {
+                    resolved = line.replace(value, resolvePath(base, value));
+                }
+            } else if (!line.startsWith("#") && !line.startsWith("http://") && !line.startsWith("https://")) {
+                resolved = resolvePath(base, line);
+            }
+            sb.append(resolved).append("\n");
+        }
+        return sb.toString();
+    }
+
+    private static String resolvePath(String base, String path) {
+        if (path.startsWith("/")) {
+            int idx = base.indexOf('/', 9);
+            return idx > 0 ? base.substring(0, idx) + path : path;
+        }
+        return base + path;
     }
 
     private static double maxPercent(HashMap<String, Integer> preUrlMap) {
@@ -162,7 +189,7 @@ public class M3U8 {
         }
     }
 
-    /** 按删除标记重建 m3u8 (跳过被删行, 保留 #EXT-X-ENDLIST) */
+    /** 按删除标记重建 m3u8 (跳过被删行, 保留 #EXT-X-ENDLIST; 相对路径分片转为绝对 URL, 供本地代理播放) */
     private static String rebuildLines(String[] lines, boolean[] delLine, String linesplit) {
         StringBuilder sb = new StringBuilder();
         boolean lastDeleted = true;
