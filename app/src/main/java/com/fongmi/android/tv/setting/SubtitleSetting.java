@@ -265,7 +265,7 @@ public class SubtitleSetting {
         subtitleView.setStyle(getStyle(context));
         subtitleView.setApplyEmbeddedStyles(!isStyleForced());
         subtitleView.setApplyEmbeddedFontSizes(true);
-        if (isPositionSet()) subtitleView.setBottomPosition(getPosition() / 100.0f);
+
     }
 
     public static void resetAdjust() {
