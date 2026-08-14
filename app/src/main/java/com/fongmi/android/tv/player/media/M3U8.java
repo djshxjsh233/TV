@@ -356,7 +356,11 @@ public class M3U8 {
             }
             group.appendTo(sb);
         }
-        return changed ? sb.toString() : line;
+        // 净化后移除所有 DISCONTINUITY 标记 (旧版3.5.7同款): 播放器把剩余分片当连续流,
+        // 用默认时间戳调整器顺序推进, 彻底无缝不卡顿 (保留标记会导致 media3 切换调整器触发重置)
+        String result = sb.toString();
+        if (changed) result = result.replaceAll("(?m)^#EXT-X-DISCONTINUITY\\s*\\n?", "");
+        return changed ? result : line;
     }
 
     private static List<Group> buildDiscontinuityGroups(String[] lines) {
