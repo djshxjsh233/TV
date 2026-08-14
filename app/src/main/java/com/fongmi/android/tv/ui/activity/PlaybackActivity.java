@@ -524,7 +524,6 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
 
         @Override
         public void onDanmakuSent(String text) {
-            if (isOwner()) getPlayerView().sendDanmaku(text);
         }
     };
 
