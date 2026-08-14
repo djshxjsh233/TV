@@ -20,7 +20,6 @@ import static androidx.media3.common.Player.COMMAND_GET_TIMELINE;
 import static androidx.media3.common.Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM;
 import static androidx.media3.common.Player.EVENT_AVAILABLE_COMMANDS_CHANGED;
 import static androidx.media3.common.Player.EVENT_IS_PLAYING_CHANGED;
-import static androidx.media3.common.Player.EVENT_MEDIA_CHAPTERS_CHANGED;
 import static androidx.media3.common.Player.EVENT_PLAYBACK_STATE_CHANGED;
 import static androidx.media3.common.Player.EVENT_PLAY_WHEN_READY_CHANGED;
 import static androidx.media3.common.Player.EVENT_POSITION_DISCONTINUITY;
@@ -476,7 +475,6 @@ public class PlayerSeekView extends FrameLayout
         events.containsAny(
             EVENT_POSITION_DISCONTINUITY,
             EVENT_TIMELINE_CHANGED,
-            EVENT_MEDIA_CHAPTERS_CHANGED,
             EVENT_AVAILABLE_COMMANDS_CHANGED);
     if (timelineChanged) {
       updateTimeline();
