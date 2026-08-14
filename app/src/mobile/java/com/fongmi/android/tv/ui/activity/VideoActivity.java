@@ -330,6 +330,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mBinding.control.title.setOnLongClickListener(view -> onChange());
         mBinding.control.right.lock.setOnClickListener(view -> onLock());
         mBinding.control.right.rotate.setOnClickListener(view -> onRotate());
+        mBinding.control.right.fullscreen.setOnClickListener(view -> onFullscreenToggle());
         mBinding.control.danmaku.setOnClickListener(view -> onDanmakuShow());
         mBinding.control.action.text.setOnClickListener(this::onTrack);
         mBinding.control.action.audio.setOnClickListener(this::onTrack);
@@ -955,6 +956,12 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         setRequestedOrientation(PlaybackOrientation.getRotateOrientation(this));
     }
 
+    /** 全屏切换按钮: 放大(进横屏) / 缩小(回竖屏), 与双击视频等效 */
+    private void onFullscreenToggle() {
+        if (isFullscreen()) exitFullscreen();
+        else enterFullscreen();
+    }
+
     private void onTrack(View view) {
         TrackDialog.create().type(Integer.parseInt(view.getTag().toString())).player(player()).view(mBinding.player.getSubtitleView()).show(this);
         hideControl();
@@ -1164,7 +1171,11 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         if (service() == null || isInPictureInPictureMode()) return;
         mBinding.control.danmaku.setVisibility(isLock() || !player().haveDanmaku() ? View.GONE : View.VISIBLE);
         mBinding.control.setting.setVisibility(mHistory == null || isFullscreen() ? View.GONE : View.VISIBLE);
-        mBinding.control.right.rotate.setVisibility(isFullscreen() && !isLock() ? View.VISIBLE : View.GONE);
+        // rotate(横竖屏切换)按钮始终显示: 竖屏=放大进横屏, 横屏=缩回竖屏 (原版仅全屏显示导致竖屏无按钮)
+        mBinding.control.right.rotate.setVisibility(isLock() ? View.GONE : View.VISIBLE);
+        // fullscreen(放大/缩小)按钮始终显示, 图标随全屏状态切换
+        mBinding.control.right.fullscreen.setVisibility(isLock() ? View.GONE : View.VISIBLE);
+        mBinding.control.right.fullscreen.setImageResource(isFullscreen() ? R.drawable.ic_control_fullscreen_exit : R.drawable.ic_control_fullscreen);
         mBinding.control.keep.setVisibility(mHistory == null || isFullscreen() ? View.GONE : View.VISIBLE);
         mBinding.control.action.getRoot().setVisibility(isFullscreen() ? View.VISIBLE : View.GONE);
         mBinding.control.right.lock.setVisibility(isFullscreen() ? View.VISIBLE : View.GONE);

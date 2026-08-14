@@ -22,4 +22,12 @@
         android:scaleType="center"
         android:src="@drawable/ic_control_rotate" />
 
+    <androidx.appcompat.widget.AppCompatImageView
+        android:id="@+id/fullscreen"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:scaleType="center"
+        android:src="@drawable/ic_control_fullscreen" />
+
 </androidx.appcompat.widget.LinearLayoutCompat>

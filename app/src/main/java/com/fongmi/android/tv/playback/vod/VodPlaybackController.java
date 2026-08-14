@@ -125,7 +125,8 @@ public class VodPlaybackController {
 
     private void renderPlaybackResult(Result result) {
         host.renderUseParse(state.isUseParse());
-        host.renderQuality(result, result.getUrl().isMulti());
+        // 清晰度区块总是显示 (单个清晰度也显示当前名称, 如"高清")
+        host.renderQuality(result, !result.getUrl().isEmpty());
         if (result.hasDesc()) host.renderDescription(result.getDesc());
         if (result.hasArtwork()) host.renderArtwork(result.getArtwork());
     }
@@ -462,7 +463,7 @@ public class VodPlaybackController {
         host.renderFlagSelection(flag);
         host.renderEpisodes(flag.getEpisodes());
         host.renderEpisodeSelection(episode);
-        host.renderQualityVisible(state.getQuality().getUrl().isMulti());
+        host.renderQualityVisible(!state.getQuality().getUrl().isEmpty());
         return true;
     }
 
@@ -546,7 +547,7 @@ public class VodPlaybackController {
     private void seamless(Flag flag) {
         History history = state.getHistory();
         Episode episode = history == null ? null : flag.find(history.getVodRemarks(), host.getVodMark().isEmpty());
-        host.renderQualityVisible(episode != null && episode.isSelected() && state.getQuality().getUrl().isMulti());
+        host.renderQualityVisible(episode != null && episode.isSelected() && !state.getQuality().getUrl().isEmpty());
         if (episode == null || episode.isSelected()) return;
         history.setVodRemarks(episode.getName());
         selectEpisode(episode);
