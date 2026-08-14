@@ -1330,6 +1330,19 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     @Override
     protected void onTracksChanged() {
         setTrackVisible();
+        updateVideoResolution();
+    }
+
+    /** 在播放画面左上角显示当前视频分辨率 (如 1280x720) */
+    private void updateVideoResolution() {
+        int width = player().getVideoWidth();
+        int height = player().getVideoHeight();
+        if (width > 0 && height > 0) {
+            mBinding.videoResolution.setText(width + "x" + height);
+            mBinding.videoResolution.setVisibility(View.VISIBLE);
+        } else {
+            mBinding.videoResolution.setVisibility(View.GONE);
+        }
     }
 
     @Override
