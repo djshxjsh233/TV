@@ -91,20 +91,28 @@ public class M3U8 {
         for (String line : lines) if (line.startsWith(TAG_DISCONTINUITY)) { hasDiscontinuity = true; break; }
         if (!hasDiscontinuity) return null; // 无 DISCONTINUITY 分段标记, 不做段级判断
 
-        // 分段: 每段累加 EXTINF 时长
+        // 分段: 每段累加 EXTINF 时长, 记录每段前是否有 DISCONTINUITY 标记
         List<BigDecimal> durations = new ArrayList<>();
         List<String> segments = new ArrayList<>();
+        List<Boolean> segHasDis = new ArrayList<>();
         StringBuilder current = new StringBuilder();
         BigDecimal currentDuration = BigDecimal.ZERO;
+        boolean hasDis = false;
         for (String line : lines) {
             if (line.startsWith(TAG_DISCONTINUITY)) {
+                // 记录: 当前正在累积的段(若有)之前有标记; 下一段前也有标记
                 if (current.length() > 0) {
                     segments.add(current.toString());
                     durations.add(currentDuration);
+                    segHasDis.add(hasDis);
                     current = new StringBuilder();
                     currentDuration = BigDecimal.ZERO;
                 }
+                hasDis = true; // 下一段前有 DISCONTINUITY
                 continue;
+            }
+            if (current.length() == 0 && segments.isEmpty() && !hasDis) {
+                // 首段无标记
             }
             current.append(line).append(linesplit);
             if (line.startsWith(TAG_MEDIA_DURATION)) {
@@ -117,8 +125,14 @@ public class M3U8 {
         if (current.length() > 0) {
             segments.add(current.toString());
             durations.add(currentDuration);
+            segHasDis.add(hasDis);
         }
         if (segments.size() < 2) return null;
+
+        // 分片总数 <= 100 不净化 (旧版3.5.7同款门槛, 防误删短视频)
+        int segCount = 0;
+        for (String seg : segments) for (String l : seg.split(linesplit)) if (!l.startsWith("#") && !l.trim().isEmpty()) segCount++;
+        if (segCount <= 100) return null;
 
         // 平均段时长
         BigDecimal total = BigDecimal.ZERO;
@@ -126,32 +140,35 @@ public class M3U8 {
         BigDecimal avg = total.divide(BigDecimal.valueOf(segments.size()), 2, java.math.RoundingMode.HALF_UP);
 
         // 判定广告段: 段时长 < 60s 且 平均 > 段时长*2 且 段时长 < 平均
+        // 或 段内分片 URL 与主流编辑距离过大 (旧版3.5.7同款, 识别同目录不同文件名的广告)
         int removedSeconds = 0;
         boolean[] delSegment = new boolean[segments.size()];
+        String mainUrl = firstUrl(segments.get(0));
         for (int i = 0; i < segments.size(); i++) {
             BigDecimal d = durations.get(i);
             int sec = d.intValue();
-            if (sec >= 60) continue;
-            if (avg.intValue() <= sec * 2) continue;
-            if (d.compareTo(avg) >= 0) continue;
-            delSegment[i] = true;
-            removedSeconds += sec;
+            boolean shortAd = sec < 60 && avg.intValue() > sec * 2 && d.compareTo(avg) < 0;
+            boolean urlDiff = false;
+            String segUrl = firstUrl(segments.get(i));
+            if (mainUrl != null && segUrl != null) {
+                int dist = levenshtein(mainUrl, segUrl);
+                urlDiff = dist > mainUrl.length() / 2; // 编辑距离超过主流URL一半视为不同来源
+            }
+            if (shortAd || urlDiff) {
+                delSegment[i] = true;
+                removedSeconds += sec;
+            }
         }
         // 删除总量 > 180s 放弃 (防误删)
         if (removedSeconds == 0 || removedSeconds > 180) return null;
         currentAdCount += removedSeconds;
 
-        // 重组: 跳过广告段
+        // 重组: 跳过广告段, 按原样恢复 DISCONTINUITY 标记 (media3 用它分配独立时间戳调整器平滑PTS跳变)
         StringBuilder sb = new StringBuilder();
-        boolean first = true;
         for (int i = 0; i < segments.size(); i++) {
             if (delSegment[i]) continue;
-            if (first) {
-                sb.append(segments.get(i));
-                first = false;
-            } else {
-                sb.append(TAG_DISCONTINUITY).append(linesplit).append(segments.get(i));
-            }
+            if (segHasDis.get(i)) sb.append(TAG_DISCONTINUITY).append(linesplit);
+            sb.append(segments.get(i));
         }
         return sb.toString();
     }
@@ -241,6 +258,34 @@ public class M3U8 {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    /** 取段内第一个分片 URL (绝对或相对) */
+    private static String firstUrl(String segment) {
+        for (String line : segment.split("\n")) {
+            if (line.length() == 0 || line.charAt(0) == '#') continue;
+            return line;
+        }
+        return null;
+    }
+
+    /** Levenshtein 编辑距离 (旧版3.5.7 d2/m.e 同款) */
+    private static int levenshtein(String a, String b) {
+        int m = a.length(), n = b.length();
+        if (m == 0) return n;
+        if (n == 0) return m;
+        int[] prev = new int[n + 1];
+        int[] curr = new int[n + 1];
+        for (int j = 0; j <= n; j++) prev[j] = j;
+        for (int i = 1; i <= m; i++) {
+            curr[0] = i;
+            for (int j = 1; j <= n; j++) {
+                int cost = a.charAt(i - 1) == b.charAt(j - 1) ? 0 : 1;
+                curr[j] = Math.min(Math.min(curr[j - 1] + 1, prev[j] + 1), prev[j - 1] + cost);
+            }
+            int[] tmp = prev; prev = curr; curr = tmp;
+        }
+        return prev[n];
     }
 
     /** 提取分片 URL 的父路径: 绝对 URL 取 域名+目录; 无斜杠相对路径(同目录)返回 null; 以/开头的返回其目录 */
