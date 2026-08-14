@@ -256,7 +256,6 @@ public class PlayerSeekView extends FrameLayout
     chapterCount = 0;
     chapterTimesMs = null;
     chapterLabels = null;
-    timeBar.setChapterTimesMs(null, 0);
     hideChapterBubble();
     updateChapterLabel(C.TIME_UNSET);
   }
