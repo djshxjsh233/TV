@@ -80,7 +80,7 @@ public final class ExoPlayerEffect implements PlayerEffect {
 
     @Override
     public void applyAudioEffect() {
-        boolean support = player.getAudioProcessingSupport() == ExoPlayer.AUDIO_PROCESSING_SUPPORTED;
+        boolean support = true;
         if (support) applyAudioConfig(getAudioChannelCount());
         else clearAudioEffect();
     }

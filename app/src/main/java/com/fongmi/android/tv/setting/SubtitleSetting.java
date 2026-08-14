@@ -53,8 +53,8 @@ public class SubtitleSetting {
     private static final float DEFAULT_TEXT_OPACITY = 1.0f;
     private static final float DEFAULT_EDGE_OPACITY = 1.0f;
     private static final float DEFAULT_BACKGROUND_OPACITY = 1.0f;
-    private static final float DEFAULT_EDGE_WIDTH = CaptionStyleCompat.DEFAULT_EDGE_WIDTH;
-    private static final float DEFAULT_SHADOW = CaptionStyleCompat.DEFAULT_SHADOW_OFFSET;
+    private static final float DEFAULT_EDGE_WIDTH = 2.0f;
+    private static final float DEFAULT_SHADOW = 0.5f;
     private static final int DEFAULT_SECONDARY_TRACK = SECONDARY_SUBTITLE_OFF;
     private static final float DEFAULT_SECONDARY_POSITION = 10.0f;
 
@@ -257,7 +257,7 @@ public class SubtitleSetting {
         CaptioningManager manager = (CaptioningManager) context.getSystemService(Context.CAPTIONING_SERVICE);
         if (getStyleSource() == STYLE_SOURCE_ORIGINAL) return CaptionStyleCompat.DEFAULT;
         if (isSystemStyle()) return manager == null ? CaptionStyleCompat.DEFAULT : CaptionStyleCompat.createFromCaptionStyle(manager.getUserStyle());
-        return new CaptionStyleCompat(getTextColor(), getBackgroundColor(), Color.TRANSPARENT, getEdgeType(), getEdgeColor(), null, getEdgeWidth(), getShadow());
+        return new CaptionStyleCompat(getTextColor(), getBackgroundColor(), Color.TRANSPARENT, getEdgeType(), getEdgeColor(), null);
     }
 
     public static void applyStyle(Context context, @Nullable SubtitleView subtitleView) {
