@@ -92,7 +92,11 @@ public class Config {
 
     public static Config vod() {
         Config item = AppDatabase.get().getConfigDao().findOne(0);
-        return item == null ? create(0) : item;
+        if (item == null) {
+            item = create(0, "https://gitee.com/zy2zy7/lintv/raw/master/jk.json", "内置接口");
+            return item;
+        }
+        return item;
     }
 
     public static Config live() {

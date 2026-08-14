@@ -111,7 +111,7 @@ public class LiveParser {
             } else if (!line.startsWith("#") && line.contains("://")) {
                 String[] parts = line.split("\\|", 2);
                 if (parts.length > 1) setting.headers(parts[1]);
-                channel.getUrls().add(parts[0]);
+                channel.getUrls().add(setting.parseUrl(parts[0]));
                 setting.copy(channel).clear();
             }
         }
@@ -133,7 +133,7 @@ public class LiveParser {
                 for (String url : split[1].split("#")) {
                     String[] parts = url.split("\\|", 2);
                     if (parts.length > 1) setting.headers(parts[1]);
-                    channel.getUrls().add(parts[0]);
+                    channel.getUrls().add(setting.parseUrl(parts[0]));
                     setting.copy(channel);
                 }
             }
@@ -187,6 +187,39 @@ public class LiveParser {
             else if (line.startsWith("#KODIPROP:inputstream.adaptive.manifest_type")) format(line);
             else if (line.startsWith("#KODIPROP:inputstream.adaptive.stream_headers")) headers(line);
             else if (line.startsWith("#KODIPROP:inputstream.adaptive.common_headers")) headers(line);
+        }
+
+        // 解析 URL 内嵌 #Referer#/#User-Agent#/#Origin# 标记, 返回干净 URL
+        private String parseUrl(String url) {
+            if (url == null || !url.contains("#")) return url;
+            int refIdx = url.indexOf("#Referer#");
+            if (refIdx >= 0) {
+                String ref = url.substring(refIdx + 9);
+                int end = ref.indexOf("#");
+                if (end < 0) end = ref.length();
+                ref = ref.substring(0, end);
+                referer = ref;
+                url = url.substring(0, refIdx) + url.substring(refIdx + 9 + ref.length());
+            }
+            int uaIdx = url.indexOf("#User-Agent#");
+            if (uaIdx >= 0) {
+                String ua = url.substring(uaIdx + 12);
+                int end = ua.indexOf("#");
+                if (end < 0) end = ua.length();
+                ua = ua.substring(0, end);
+                this.ua = ua;
+                url = url.substring(0, uaIdx) + url.substring(uaIdx + 12 + ua.length());
+            }
+            int ogIdx = url.indexOf("#Origin#");
+            if (ogIdx >= 0) {
+                String og = url.substring(ogIdx + 8);
+                int end = og.indexOf("#");
+                if (end < 0) end = og.length();
+                og = og.substring(0, end);
+                origin = og;
+                url = url.substring(0, ogIdx) + url.substring(ogIdx + 8 + og.length());
+            }
+            return url;
         }
 
         private Setting copy(Channel channel) {

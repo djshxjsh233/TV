@@ -7,8 +7,6 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.media3.common.C;
 import androidx.media3.common.Format;
-import androidx.media3.common.MediaChapter;
-import androidx.media3.common.MediaEdition;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.MediaMetadata;
 import androidx.media3.common.PlaybackException;
@@ -100,14 +98,6 @@ public class PlayerManager implements ParseCallback {
 
     public int getAudioChannelCount() {
         return engine == null ? Format.NO_VALUE : engine.getAudioChannelCount();
-    }
-
-    public List<MediaChapter> getCurrentMediaChapters() {
-        return player.getCurrentMediaChapters();
-    }
-
-    public List<MediaEdition> getCurrentMediaEditions() {
-        return player.getCurrentMediaEditions();
     }
 
     public MediaItem getCurrentMediaItem() {
@@ -203,11 +193,11 @@ public class PlayerManager implements ParseCallback {
     }
 
     public boolean haveEdition() {
-        return !getCurrentMediaEditions().isEmpty();
+        return false;
     }
 
     public boolean haveChapter() {
-        return !getCurrentMediaChapters().isEmpty();
+        return false;
     }
 
     public boolean haveDanmaku() {
@@ -301,12 +291,10 @@ public class PlayerManager implements ParseCallback {
         startCurrent();
     }
 
-    public void selectChapter(MediaChapter chapter) {
-        player.selectChapter(chapter);
+    public void selectChapter(Object chapter) {
     }
 
-    public void selectEdition(MediaEdition edition) {
-        player.selectEdition(edition);
+    public void selectEdition(Object edition) {
     }
 
     public void setDanmakuConfig(DanmakuConfig config) {
@@ -659,16 +647,6 @@ public class PlayerManager implements ParseCallback {
             setTrack(Track.find(getKey()));
             callback.onTracksChanged();
             initTrack = true;
-        }
-
-        @Override
-        public void onMediaChaptersChanged(@NonNull List<MediaChapter> chapters) {
-            callback.onMediaOptionsChanged();
-        }
-
-        @Override
-        public void onMediaEditionsChanged(@NonNull List<MediaEdition> editions) {
-            callback.onMediaOptionsChanged();
         }
 
         @Override

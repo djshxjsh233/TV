@@ -21,13 +21,11 @@ public class ExoPlayerEngine implements PlayerEngine, AnalyticsListener {
     private final ExoErrorMessageProvider provider;
     private final ExoPlayerSession session;
     private final ExoPlayerEffect effect;
-    private final ExoDiskPreload preload;
     private final ExoPlayer player;
     private PlaySpec spec;
 
     public ExoPlayerEngine(int decode, Player.Listener listener) {
         this.effect = new ExoPlayerEffect();
-        this.preload = new ExoDiskPreload();
         this.provider = new ExoErrorMessageProvider();
         this.session = new ExoPlayerSession(decode, listener, effect.getAudioProcessor());
         this.player = this.session.player();
@@ -74,7 +72,6 @@ public class ExoPlayerEngine implements PlayerEngine, AnalyticsListener {
     @Override
     public void release() {
         player.removeAnalyticsListener(this);
-        preload.release();
         effect.release();
         session.release();
     }
@@ -102,7 +99,6 @@ public class ExoPlayerEngine implements PlayerEngine, AnalyticsListener {
 
     @Override
     public void stop() {
-        preload.stop();
         player.stop();
     }
 
@@ -127,7 +123,6 @@ public class ExoPlayerEngine implements PlayerEngine, AnalyticsListener {
         effect.clearAudioEffect();
         if (source == null) player.setMediaItem(item, position);
         else player.setMediaSource(source, position);
-        preload.start(player, item);
         prepareAndPlay();
     }
 

@@ -85,10 +85,8 @@ import com.fongmi.android.tv.ui.custom.CustomKeyDown;
 import com.fongmi.android.tv.ui.custom.CustomMovement;
 import com.fongmi.android.tv.ui.custom.SpaceItemDecoration;
 import com.fongmi.android.tv.ui.dialog.CastDialog;
-import com.fongmi.android.tv.ui.dialog.ChapterDialog;
 import com.fongmi.android.tv.ui.dialog.ControlDialog;
 import com.fongmi.android.tv.ui.dialog.DanmakuDialog;
-import com.fongmi.android.tv.ui.dialog.EditionDialog;
 import com.fongmi.android.tv.ui.dialog.EpisodeGridDialog;
 import com.fongmi.android.tv.ui.dialog.EpisodeListDialog;
 import com.fongmi.android.tv.ui.dialog.InfoDialog;
@@ -963,13 +961,9 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private void onEdition() {
-        EditionDialog.create().player(player()).show(this);
-        hideControl();
     }
 
     private void onChapter() {
-        ChapterDialog.create().player(player()).show(this);
-        hideControl();
     }
 
     private void onDanmaku() {

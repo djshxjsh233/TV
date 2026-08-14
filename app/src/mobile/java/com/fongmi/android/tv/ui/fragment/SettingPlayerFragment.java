@@ -17,7 +17,6 @@ import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.activity.HomeActivity;
 import com.fongmi.android.tv.ui.base.BaseFragment;
 import com.fongmi.android.tv.ui.dialog.BufferDialog;
-import com.fongmi.android.tv.ui.dialog.MpvConfDialog;
 import com.fongmi.android.tv.ui.dialog.UaDialog;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
@@ -84,7 +83,6 @@ public class SettingPlayerFragment extends BaseFragment implements UaListener, B
     }
 
     private void onMpvConf(View view) {
-        MpvConfDialog.show(this);
     }
 
     private void setMpvGpuNext(View view) {

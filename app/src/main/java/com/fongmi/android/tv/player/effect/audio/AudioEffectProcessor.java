@@ -3,7 +3,6 @@ package com.fongmi.android.tv.player.effect.audio;
 import androidx.annotation.NonNull;
 import androidx.media3.common.C;
 import androidx.media3.common.audio.BaseAudioProcessor;
-import androidx.media3.mpvplayer.audio.AudioChannelMix;
 
 import java.nio.ByteBuffer;
 
@@ -161,7 +160,7 @@ public final class AudioEffectProcessor extends BaseAudioProcessor {
     }
 
     private void applyStereo(float[] samples) {
-        setStereo(samples, AudioChannelMix.mixStereoLeft(samples), AudioChannelMix.mixStereoRight(samples));
+        setStereo(samples, (samples.length > 0 ? samples[0] : 0.0f), (samples.length > 1 ? samples[1] : 0.0f));
     }
 
     private void setStereo(float[] samples, float left, float right) {
@@ -171,15 +170,15 @@ public final class AudioEffectProcessor extends BaseAudioProcessor {
     }
 
     private void applyMono(float[] samples) {
-        float mono = sanitize(AudioChannelMix.mixMono(samples));
+        float mono = sanitize(((samples.length > 0 ? samples[0] : 0.0f) + (samples.length > 1 ? samples[1] : 0.0f)) / 2.0f);
         samples[0] = mono;
         samples[1] = mono;
         clearExtraChannels(samples);
     }
 
     private void applyReverse(float[] samples) {
-        float left = AudioChannelMix.mixStereoLeft(samples);
-        float right = AudioChannelMix.mixStereoRight(samples);
+        float left = (samples.length > 0 ? samples[0] : 0.0f);
+        float right = (samples.length > 1 ? samples[1] : 0.0f);
         setStereo(samples, right, left);
     }
 
