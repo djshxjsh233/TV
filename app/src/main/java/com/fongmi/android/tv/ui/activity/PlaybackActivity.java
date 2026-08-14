@@ -149,8 +149,7 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
     }
 
     public void toggleDebugView() {
-        getPlayerView().toggleDebugView();
-        PlayerSetting.putDebug(getPlayerView().isDebugViewVisible());
+        PlayerSetting.putDebug(!PlayerSetting.isDebug());
     }
 
     public void onChoose() {
@@ -414,16 +413,10 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
 
     private void configurePlayerView() {
         PlayerView playerView = getPlayerView();
-        playerView.setRender(PlayerSetting.getRender());
-        playerView.setDanmakuOkHttpClient(OkHttp.player());
-        playerView.setDanmakuEnabled(DanmakuSetting.isShow());
-        playerView.setDanmakuConfig(DanmakuSetting.getConfig());
         SubtitleSetting.applyStyle(this, playerView.getSubtitleView());
     }
 
     private void syncDanmakuSource() {
-        if (mService == null || !isOwner()) return;
-        getPlayerView().setDanmakuSource(player().getSelectedDanmakuUri());
     }
 
     private void releasePlaybackService() {
@@ -494,7 +487,7 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
         @Override
         public void onTracksChanged() {
             if (isOwner()) PlaybackActivity.this.onTracksChanged();
-            if (PlayerSetting.isDebug() && !getPlayerView().isDebugViewVisible()) getPlayerView().toggleDebugView();
+            if (PlayerSetting.isDebug()) toggleDebugView();
         }
 
         @Override
@@ -519,17 +512,14 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
 
         @Override
         public void onDanmakuSourceChanged(Uri uri) {
-            if (isOwner()) getPlayerView().setDanmakuSource(uri);
         }
 
         @Override
         public void onDanmakuConfigChanged(DanmakuConfig config) {
-            if (isOwner()) getPlayerView().setDanmakuConfig(config);
         }
 
         @Override
         public void onDanmakuEnabledChanged(boolean enabled) {
-            if (isOwner()) getPlayerView().setDanmakuEnabled(enabled);
         }
 
         @Override
