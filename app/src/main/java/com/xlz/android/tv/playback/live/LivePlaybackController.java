@@ -20,6 +20,7 @@ public class LivePlaybackController {
 
     private final LivePlaybackState state;
     private final LivePlaybackHost host;
+    private int fallbackCount;
 
     public LivePlaybackController(LivePlaybackHost host, LivePlaybackState state) {
         this.state = state;
@@ -41,6 +42,7 @@ public class LivePlaybackController {
         LivePlayRequest activeRequest = state.getActiveRequest();
         boolean restore = activeRequest != null && activeRequest.matches(channel);
         state.setChannel(channel);
+        fallbackCount = 0;
         host.renderChannelSelection(channel);
         if (restore) restorePlaybackIfNeeded();
         else {
@@ -77,6 +79,7 @@ public class LivePlaybackController {
     private void startResolvedPlayback(Result result, LivePlayRequest request, String realUrl) {
         long position = result.hasPosition() ? result.getPosition() : request.getPosition();
         state.setPlayingRequest(request, realUrl);
+        fallbackCount = 0;
         host.startPlayback(result, position, publishPlaybackMetadata(getEpgData(request)));
     }
 
@@ -190,8 +193,14 @@ public class LivePlaybackController {
 
     private void fallbackAfterError() {
         Channel channel = state.getChannel();
-        if (!LiveSetting.isChange() || channel == null || channel.isLast()) return;
-        nextLine(true);
+        if (!LiveSetting.isChange() || channel == null) return;
+        if (channel.isLast()) {
+            // 单线路/线路全失效 → 切下一个频道; 限制连续自动切换次数避免整组失效时无限循环
+            if (fallbackCount++ < 5) nextChannel();
+            else fallbackCount = 0;
+        } else {
+            nextLine(true);
+        }
     }
 
     private void playNextProgram() {

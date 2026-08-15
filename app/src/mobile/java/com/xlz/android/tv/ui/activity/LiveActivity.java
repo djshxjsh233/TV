@@ -49,6 +49,7 @@ import com.xlz.android.tv.playback.PlaybackResult;
 import com.xlz.android.tv.playback.live.LivePlayRequest;
 import com.xlz.android.tv.playback.live.LivePlaybackController;
 import com.xlz.android.tv.playback.live.LivePlaybackHost;
+import com.xlz.android.tv.player.exo.M3u8AdInterceptor;
 import com.xlz.android.tv.player.extractor.Source;
 import com.xlz.android.tv.service.PlaybackService;
 import com.xlz.android.tv.setting.LiveSetting;
@@ -723,6 +724,7 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
 
     @Override
     public void startPlayback(Result result, long position, MediaMetadata metadata) {
+        M3u8AdInterceptor.enabled = false; // 直播流不净化(去广告只针对点播, 直播无广告且净化会误伤DISCONTINUITY)
         startPlayer(mPlaybackKey = result.getRealUrl(), result, false, getHome().getTimeout(), position, metadata);
     }
 

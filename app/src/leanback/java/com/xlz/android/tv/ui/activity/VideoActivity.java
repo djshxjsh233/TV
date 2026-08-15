@@ -60,6 +60,7 @@ import com.xlz.android.tv.playback.vod.VodPlaybackController;
 import com.xlz.android.tv.playback.vod.VodPlaybackHost;
 import com.xlz.android.tv.playback.vod.VodPlaybackMedia;
 import com.xlz.android.tv.player.media.PlaySpec;
+import com.xlz.android.tv.player.exo.M3u8AdInterceptor;
 import com.xlz.android.tv.service.PlaybackService;
 import com.xlz.android.tv.setting.DanmakuSetting;
 import com.xlz.android.tv.setting.PlayerSetting;
@@ -533,11 +534,13 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, 
 
     @Override
     public void startPlayback(Result result, boolean useParse, long startPositionMs, MediaMetadata metadata) {
+        M3u8AdInterceptor.enabled = true; // 点播走净化
         startPlayer(getHistoryKey(), result, useParse, getSite().getTimeout(), startPositionMs, metadata);
     }
 
     @Override
     public boolean preloadPlayback(Result result, long startPositionMs, MediaMetadata metadata) {
+        M3u8AdInterceptor.enabled = true; // 点播预加载同样走净化
         return player().preload(PlaySpec.from(result, getHistoryKey(), metadata), startPositionMs);
     }
 

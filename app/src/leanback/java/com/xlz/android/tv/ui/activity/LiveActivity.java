@@ -49,6 +49,7 @@ import com.xlz.android.tv.playback.live.LivePlayRequest;
 import com.xlz.android.tv.playback.live.LivePlaybackController;
 import com.xlz.android.tv.playback.live.LivePlaybackHost;
 import com.xlz.android.tv.player.extractor.Source;
+import com.xlz.android.tv.player.exo.M3u8AdInterceptor;
 import com.xlz.android.tv.service.PlaybackService;
 import com.xlz.android.tv.setting.LiveSetting;
 import com.xlz.android.tv.setting.PlayerSetting;
@@ -774,6 +775,7 @@ public class LiveActivity extends PlaybackActivity implements GroupAdapter.OnCli
 
     @Override
     public void startPlayback(Result result, long position, MediaMetadata metadata) {
+        M3u8AdInterceptor.enabled = false; // 直播流不净化
         startPlayer(mPlaybackKey = result.getRealUrl(), result, false, getHome().getTimeout(), position, metadata);
     }
 
