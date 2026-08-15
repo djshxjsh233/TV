@@ -53,7 +53,12 @@ public class Spider extends com.github.catvod.crawler.Spider {
     }
 
     private Object call(String func, Object... args) throws Exception {
-        return submit(() -> Async.run(jsObject, func, args)).get().get();
+        try {
+            return submit(() -> Async.run(jsObject, func, args)).get().get();
+        } catch (Exception e) {
+            android.util.Log.e("QuickJS", "JS调用[" + func + "]失败: " + e.getMessage(), e);
+            throw e;
+        }
     }
 
     @Override
@@ -150,12 +155,17 @@ public class Spider extends com.github.catvod.crawler.Spider {
     }
 
     private void initializeJS() throws Exception {
-        submit(() -> {
-            createCtx();
-            createFun();
-            createObj();
-            return null;
-        }).get();
+        try {
+            submit(() -> {
+                createCtx();
+                createFun();
+                createObj();
+                return null;
+            }).get();
+        } catch (Exception e) {
+            android.util.Log.e("QuickJS", "JS初始化失败 api=" + api + " : " + e.getMessage(), e);
+            throw e;
+        }
     }
 
     private void createCtx() {
