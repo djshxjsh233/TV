@@ -47,11 +47,15 @@ jobs:
       - name: Build APK (mobile arm64)
         run: ./gradlew assembleMobileArm64_v8aRelease --no-daemon
 
+      - name: Copy APK to artifact root
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/mobileArm64_v8a/release/*.apk dist/
+          ls -la dist/
+
       - name: Upload APK
         uses: actions/upload-artifact@v5
         with:
           name: fongmi-mobile-arm64
-          path: |
-            app/build/outputs/apk/mobileArm64_v8a/release/*.apk
-            app/build/outputs/apk/*/release/*.apk
-            app/src/main/jniLibs/arm64-v8a/*.so
+          path: dist/*.apk
+          if-no-files-found: error
