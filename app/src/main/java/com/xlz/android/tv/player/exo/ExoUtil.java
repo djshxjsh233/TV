@@ -78,25 +78,23 @@ public class ExoUtil {
     }
 
     private static boolean isAudioSoftwareDecode(int decode) {
-        return decode == PlayerEngine.SOFT && DecodeSetting.isAudioPrefer();
+        return decode == PlayerEngine.SOFT;
     }
 
-    private static boolean isVideoSoftwareDecode(int decode) {
-        return decode == PlayerEngine.SOFT && DecodeSetting.isVideoPrefer();
+    static RenderersFactory buildRenderersFactory(int decode) {
+        return buildRenderersFactory(decode, null);
     }
 
-    static RenderersFactory buildRenderersFactory() {
-        return buildRenderersFactory(null);
-    }
-
-    static RenderersFactory buildRenderersFactory(AudioProcessor audioProcessor) {
+    static RenderersFactory buildRenderersFactory(int decode, AudioProcessor audioProcessor) {
         DefaultRenderersFactory factory = new DefaultRenderersFactory(App.get()) {
             @Override
             protected AudioSink buildAudioSink(@NonNull Context context, boolean enableFloatOutput, boolean enableAudioOutputPlaybackParams) {
                 return ExoUtil.buildAudioSink(context, enableFloatOutput, enableAudioOutputPlaybackParams, audioProcessor);
             }
         };
-        return factory.setEnableDecoderFallback(true).setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON);
+        // 软解模式: FFmpeg(media3-decoder-ffmpeg) 音频软解优先; 硬解模式: MediaCodec 优先, FFmpeg 自动兜底
+        int extensionMode = isAudioSoftwareDecode(decode) ? DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER : DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON;
+        return factory.setEnableDecoderFallback(true).setExtensionRendererMode(extensionMode);
     }
 
     private static AudioSink buildAudioSink(Context context, boolean enableFloatOutput, boolean enableAudioOutputPlaybackParams, AudioProcessor audioProcessor) {

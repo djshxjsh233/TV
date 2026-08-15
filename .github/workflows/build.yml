@@ -26,6 +26,14 @@ jobs:
         with:
           python-version: '3.10'
 
+      - name: Build FFmpeg decoder (skip if so committed)
+        run: |
+          if [ -f app/src/main/jniLibs/arm64-v8a/libffmpegJNI.so ]; then
+            echo "libffmpegJNI.so already committed, skip build"
+          else
+            bash .github/scripts/build_ffmpeg_decoder.sh
+          fi
+
       - name: Configure local.properties
         run: |
           echo "sdk.dir=$ANDROID_HOME" > local.properties
@@ -46,3 +54,4 @@ jobs:
           path: |
             app/build/outputs/apk/mobileArm64_v8a/release/*.apk
             app/build/outputs/apk/*/release/*.apk
+            app/src/main/jniLibs/arm64-v8a/*.so

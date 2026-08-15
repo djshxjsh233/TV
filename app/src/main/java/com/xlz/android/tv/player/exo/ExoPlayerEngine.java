@@ -19,14 +19,24 @@ import com.xlz.android.tv.player.media.PlaySpec;
 public class ExoPlayerEngine implements PlayerEngine, AnalyticsListener {
 
     private final ExoErrorMessageProvider provider;
-    private final ExoPlayerSession session;
-    private final ExoPlayerEffect effect;
-    private final ExoPlayer player;
+    private final Player.Listener listener;
+    private ExoPlayerEffect effect;
+    private ExoPlayerSession session;
+    private ExoPlayer player;
+    private int decode;
     private PlaySpec spec;
 
     public ExoPlayerEngine(int decode, Player.Listener listener) {
-        this.effect = new ExoPlayerEffect();
+        this.decode = decode;
+        this.listener = listener;
         this.provider = new ExoErrorMessageProvider();
+        rebuild();
+    }
+
+    private void rebuild() {
+        if (effect != null) effect.release();
+        if (session != null) session.release();
+        this.effect = new ExoPlayerEffect();
         this.session = new ExoPlayerSession(decode, listener, effect.getAudioProcessor());
         this.player = this.session.player();
         this.player.addAnalyticsListener(this);
@@ -78,7 +88,9 @@ public class ExoPlayerEngine implements PlayerEngine, AnalyticsListener {
 
     @Override
     public void setDecode(int decode) {
-        session.setDecode(decode);
+        if (this.decode == decode) return;
+        this.decode = decode;
+        rebuild();
     }
 
     @Override

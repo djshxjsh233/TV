@@ -109,6 +109,7 @@ dependencies {
     implementation libs.lifecycle.service
     implementation libs.media
     implementation libs.media3.common
+    implementation libs.media3.decoder
     implementation libs.media3.exoplayer
     implementation libs.media3.exoplayer.hls
     implementation libs.media3.exoplayer.dash

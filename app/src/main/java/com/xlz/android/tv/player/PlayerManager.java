@@ -446,7 +446,10 @@ public class PlayerManager implements ParseCallback {
     }
 
     public void toggleDecode() {
+        PlaybackSnapshot snapshot = PlaybackSnapshot.capture(player);
         setDecode(isHard() ? PlayerEngine.SOFT : PlayerEngine.HARD);
+        startCurrent(snapshot.positionMs());
+        snapshot.restore(player);
     }
 
     private void handleDecodeError(PlaybackException e) {
@@ -455,8 +458,8 @@ public class PlayerManager implements ParseCallback {
     }
 
     private void retryDecode(int decode) {
-        setDecode(decode);
         PlaybackSnapshot snapshot = PlaybackSnapshot.capture(player);
+        setDecode(decode);
         startCurrent(snapshot.positionMs());
         snapshot.restore(player);
     }
@@ -464,6 +467,7 @@ public class PlayerManager implements ParseCallback {
     private void setDecode(int decode) {
         this.decode = decode;
         engine.setDecode(decode);
+        setPlayer(engine.getPlayer());
         callback.onDecodeChanged();
     }
 

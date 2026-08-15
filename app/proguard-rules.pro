@@ -80,3 +80,7 @@
 -keep class com.google.zxing.qrcode.QRCodeReader { *; }
 -keep class com.google.zxing.qrcode.QRCodeWriter { *; }
 -keep class com.google.zxing.qrcode.decoder.ErrorCorrectionLevel { *; }
+
+# media3 FFmpeg decoder (DefaultRenderersFactory 通过 Class.forName 反射加载, 必须保留)
+-keep class androidx.media3.decoder.ffmpeg.** { *; }
+-keepclasseswithmembernames class androidx.media3.decoder.ffmpeg.** { native <methods>; }
