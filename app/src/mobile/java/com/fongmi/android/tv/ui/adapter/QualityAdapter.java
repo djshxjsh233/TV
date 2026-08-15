@@ -1,5 +1,6 @@
 package com.fongmi.android.tv.ui.adapter;
 
+import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.ViewGroup;
 
@@ -47,7 +48,9 @@ public class QualityAdapter extends RecyclerView.Adapter<QualityAdapter.ViewHold
 
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
-        holder.binding.text.setText(result.getUrl().n(position));
+        // 清晰度名称为空时显示"默认", 避免空白
+        String name = result.getUrl().n(position);
+        holder.binding.text.setText(TextUtils.isEmpty(name) ? "默认" : name);
         holder.binding.text.setOnClickListener(v -> onItemClick(position));
         holder.binding.text.setSelected(result.getUrl().getPosition() == position);
     }
