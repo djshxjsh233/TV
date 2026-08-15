@@ -3,7 +3,7 @@ plugins {
 }
 
 android {
-    namespace = 'com.fongmi.hook'
+    namespace = 'com.xlz.hook'
 
     compileSdk libs.versions.compileSdk.get().toInteger()
 

@@ -3,7 +3,7 @@ plugins {
 }
 
 android {
-    namespace = 'com.fongmi.android.tv.quickjs'
+    namespace = 'com.xlz.android.tv.quickjs'
 
     compileSdk libs.versions.compileSdk.get().toInteger()
 
