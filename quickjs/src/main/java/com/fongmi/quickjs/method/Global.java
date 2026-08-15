@@ -8,10 +8,13 @@ import androidx.annotation.NonNull;
 import com.fongmi.quickjs.bean.Req;
 import com.fongmi.quickjs.utils.Connect;
 import com.fongmi.quickjs.utils.Crypto;
+import com.fongmi.quickjs.utils.HtmlParser;
+import com.fongmi.quickjs.utils.JSUtil;
 import com.github.catvod.Proxy;
 import com.github.catvod.utils.Trans;
 import com.github.catvod.utils.UriUtil;
 import com.orhanobut.logger.Logger;
+import com.whl.quickjs.wrapper.JSArray;
 import com.whl.quickjs.wrapper.JSFunction;
 import com.whl.quickjs.wrapper.JSMethod;
 import com.whl.quickjs.wrapper.JSObject;
@@ -154,6 +157,30 @@ public class Global {
     @JSMethod
     public String joinUrl(String parent, String child) {
         return UriUtil.resolve(parent, child);
+    }
+
+    @Keep
+    @JSMethod
+    public String pd(String html, String rule, String add_url) {
+        return HtmlParser.parseDomForUrl(html, rule, add_url);
+    }
+
+    @Keep
+    @JSMethod
+    public String pdfh(String html, String rule) {
+        return HtmlParser.parseDomForUrl(html, rule, "");
+    }
+
+    @Keep
+    @JSMethod
+    public JSArray pdfa(String html, String rule) {
+        return JSUtil.toArray(ctx, HtmlParser.parseDomForArray(html, rule));
+    }
+
+    @Keep
+    @JSMethod
+    public JSArray pdfl(String html, String p1, String list_text, String list_url, String add_url) {
+        return JSUtil.toArray(ctx, HtmlParser.parseDomForList(html, p1, list_text, list_url, add_url));
     }
 
     @Keep
