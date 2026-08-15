@@ -19,6 +19,7 @@ import androidx.media3.exoplayer.analytics.PlayerId;
 import androidx.media3.exoplayer.audio.AudioSink;
 import androidx.media3.exoplayer.audio.AudioTrackAudioOutputProvider;
 import androidx.media3.exoplayer.audio.DefaultAudioSink;
+import androidx.media3.exoplayer.mediacodec.MediaCodecSelector;
 import androidx.media3.exoplayer.source.preload.DefaultPreloadManager;
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector;
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector;
@@ -92,7 +93,10 @@ public class ExoUtil {
                 return ExoUtil.buildAudioSink(context, enableFloatOutput, enableAudioOutputPlaybackParams, audioProcessor);
             }
         };
-        // 软解模式: FFmpeg(media3-decoder-ffmpeg) 音频软解优先; 硬解模式: MediaCodec 优先, FFmpeg 自动兜底
+        // 软解模式(备用): 视频 MediaCodec 软件解码器优先(OMX.google, 硬解兜底) + 音频 FFmpeg 优先; 硬解模式(默认): 全硬解优先
+        if (isAudioSoftwareDecode(decode)) {
+            factory.setMediaCodecSelector(MediaCodecSelector.PREFER_SOFTWARE);
+        }
         int extensionMode = isAudioSoftwareDecode(decode) ? DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER : DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON;
         return factory.setEnableDecoderFallback(true).setExtensionRendererMode(extensionMode);
     }
